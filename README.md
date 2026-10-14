@@ -38,12 +38,25 @@ cloud, no telemetry.
   - Understands "new line" and "new paragraph".
   - Writes times properly ("10:30").
   - Fits capitalization and spacing to the text around the cursor, and is code-aware in editors and terminals.
-- **Personal dictionary** for names and jargon the model mishears.
+- **Learns from your corrections:** fix a name Kudu misspelled and it remembers it for next
+  time (✦ in the Dictionary). Or add words yourself.
+- **Insights:** words per minute, words cleaned up, time saved, a streak heat map and where
+  you dictate.
 - **Snippets:** say "my email" and get your address. Supports `{date}`, `{time}` and `{clipboard}`.
 - **History** saved only on your Mac, searchable by day, with the raw transcript.
 - A small frosted-glass pill with a live waveform; sounds; open at login.
 
 See the [roadmap](docs/ROADMAP.md) for what's next.
+
+## The AI inside (all on your Mac)
+| Job | What runs it |
+|---|---|
+| Speech → text | NVIDIA **Parakeet TDT 0.6B v2** on the Apple Neural Engine, through FluidAudio |
+| Formatting and Command mode | Apple's on-device **Foundation Models** (the ~3B model behind Apple Intelligence, macOS 26+) |
+| Cleanup, styles, dictionary, learning | Fast deterministic rules, written in Swift |
+
+There are no servers, no accounts and no API keys. After the one-time model download, Kudu
+works offline.
 
 ## Quick start (macOS)
 ```bash

@@ -1,6 +1,10 @@
 # Roadmap
 
-## v0.4 (current)
+## v0.5 (current)
+- [x] Learn spellings from the corrections you make after dictating
+- [x] Insights: speed, cleanups, streak heat map, where you dictate
+
+## v0.4
 - [x] Command mode on fn + ⌃: edit the selection or draft new text, on device
 - [x] Formatting while you speak: ~100–700 ms from release to text
 - [x] Styles per app category and editing strength
@@ -38,7 +42,6 @@
 - [ ] Spoken "press enter" and other editing commands
 
 ## v0.6: learning
-- [ ] Notice corrections made right after a dictation and suggest dictionary entries
 - [ ] Import and export the dictionary as CSV
 
 ## v1.0: release

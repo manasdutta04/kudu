@@ -91,6 +91,17 @@ fn up   ─▶ AudioRecorder.stop ─▶ final transcription ─▶ reuse format
 - History is pruned to the retention setting (90 days by default).
 - `UsageStats` derives total words, words per minute (dictations of 1.5 s or longer) and the day streak for the Home page.
 
+### Learning from corrections (`KuduKit/Learning`, `KuduCore/CorrectionLearner`)
+1. **Snapshot.** After inserting text, `EditObserver` snapshots the field through Accessibility and finds the inserted text by the unchanged text around it.
+2. **Watch.** It polls every 1.5 s for up to 45 s, and stops when focus moves or the text around it changes.
+3. **Compare.** `CorrectionLearner` word-aligns what Kudu typed with the user's edited version.
+4. **Decide.** It keeps 1–3-word substitutions that look like a fixed spelling of a name or term: letter similarity, a matching consonant-sound key, or a proper-noun capitalization. Rewording, everyday words, numbers and rewrites are ignored.
+5. **Save.** Learned words go into the dictionary marked ✦ and are used from the next dictation.
+
+### Insights (`KuduKit/Storage/UsageLedger`, `KuduCore/Insights`)
+- `UsageLedger` keeps text-free daily totals in `usage.json`: words, dictations, audio time, cleanups, dictionary fixes, learned words, and words per category and per app. It is backfilled from history on first run.
+- `Insights` derives speed, the 26-week heat map (levels relative to your 90th-percentile day), current and longest streak, the monthly change and time saved.
+
 ### App and branding (`Kudu/`, `KuduKit/Branding`)
 - A regular Dock app with one main window: a hidden title bar, a custom sidebar and a rounded content panel. Closing it keeps Kudu listening, and the Dock icon reopens it.
 - Setup lives on the Home page (`SetupCard`), shown only while something is missing.

@@ -3,6 +3,16 @@
 All notable changes to Kudu are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com) and the project uses [Semantic Versioning](https://semver.org).
 
+## [0.5.0] - 2026-10-14
+### Added
+- **Learns from your corrections.** Fix a name or term Kudu misspelled, right after dictating,
+  and it's saved to your dictionary (marked ✦) and spelled right from then on. On-device,
+  and it can be turned off.
+- **Insights:** words per minute gauge, words cleaned up and learned, words dictated with the
+  monthly change and time saved, a 26-week streak heat map, and where you dictate (by type of
+  app and top apps).
+- Dictionary and Snippets have intro cards, search and an "Add new" button.
+
 ## [0.4.1] - 2026-10-14
 ### Added
 - A native menu-bar menu with Paste last transcript (⌃⌘V) and quick submenus for the

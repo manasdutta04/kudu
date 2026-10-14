@@ -15,6 +15,12 @@ Kudu is built so that what you say stays on your Mac.
   `~/Library/Application Support/Kudu/history.jsonl`, so the Home page can show it with your
   stats. It is kept for 90 days by default; choose 30 days, 90 days or forever, or clear it,
   in Settings.
+- **Usage totals** for Insights (words, dictations and time per day, and which kinds of apps
+  you dictate into) are saved in `usage.json` in the same folder. They contain no text, so
+  they are kept when old history is deleted.
+- **Learning from corrections:** after a dictation Kudu reads the text field it typed into, for
+  up to 45 seconds and only until you move elsewhere, to notice if you fix a word it got wrong.
+  Only the corrected word is saved, to your dictionary. You can turn this off in Settings.
 - **Settings, dictionary and snippets** are saved as JSON files in the same folder.
 
 ## Network access
