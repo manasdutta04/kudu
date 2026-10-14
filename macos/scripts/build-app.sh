@@ -26,6 +26,7 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN_DIR/Kudu" "$APP/Contents/MacOS/Kudu"
 cp Sources/Kudu/Info.plist "$APP/Contents/Info.plist"
+cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 # SwiftPM resource bundles from dependencies (unused by the ASR path, but keep them so
 # Bundle.module lookups never crash).
 find "$BIN_DIR" -maxdepth 1 -name '*.bundle' -exec cp -R {} "$APP/Contents/Resources/" \;
