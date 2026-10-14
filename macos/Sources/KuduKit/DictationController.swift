@@ -459,15 +459,30 @@ public final class DictationController: ObservableObject {
                 before: TextPipeline.beforeFormatting(settings: settings, dictionary: store.dictionary),
                 request: FormatRequest(
                     text: "", category: category, style: context.style, strength: settings.editingStrength,
-                    terms: store.dictionary.map(\.written), fieldBefore: fieldBefore
+                    terms: store.dictionary.map(\.written), fieldBefore: fieldBefore,
+                    appName: NSWorkspace.shared.frontmostApplication?.localizedName
                 ),
-                // Code editors and terminals get the rule cleanup only: no prose formatting.
-                formattingAvailable: formatter.isAvailable && category != .code && settings.editingStrength != .verbatim
+                formattingAvailable: formatter.isAvailable && settings.editingStrength != .verbatim
             )
         )
         streaming = session
         session.start()
+
+        // Names and terms on screen, read in the background while the user speaks.
+        screenTerms = []
+        Task.detached(priority: .userInitiated) {
+            let terms = ScreenContext.terms()
+            await MainActor.run { [weak self, weak session] in
+                guard let self, !terms.isEmpty else { return }
+                self.screenTerms = terms
+                session?.addTerms(terms)
+                self.log.debug("Screen terms: \(terms.count)")
+            }
+        }
     }
+
+    /// Names and terms visible when the current dictation started.
+    private var screenTerms: [String] = []
 
     private func cancelRecording() {
         guard isRecording else { return }
@@ -532,7 +547,7 @@ public final class DictationController: ObservableObject {
             let interval = signposter.beginInterval("dictation")
             do {
                 let result = try await session.finish(samples: samples)
-                var text = result.text
+                var text = ScreenSpeller(terms: self.screenTerms).apply(result.text)
                 var formatted = result.formatted
                 if let expansion = snippets.match(result.raw) {
                     text = expansion

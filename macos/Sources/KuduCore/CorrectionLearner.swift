@@ -82,7 +82,7 @@ public enum CorrectionLearner {
 
     /// Whether `heard` is plausibly a mis-hearing or misspelling of `written`: close in spelling,
     /// or the same consonant sounds ("coo doo" / "Kudu", "priyah" / "Priya").
-    static func soundsAlike(_ heard: String, _ written: String) -> Bool {
+    public static func soundsAlike(_ heard: String, _ written: String) -> Bool {
         let a = letters(heard)
         let b = letters(written)
         guard !a.isEmpty, !b.isEmpty else { return false }
