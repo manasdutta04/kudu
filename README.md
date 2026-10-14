@@ -15,7 +15,7 @@ cloud, no telemetry.
 
 | Platform | Status | Folder |
 |---|---|---|
-| macOS 14+ (Apple Silicon) | ✅ Available (early) | [`macos/`](macos) (Swift, SwiftUI, AppKit) |
+| macOS 14+ on Apple Silicon (M1 or newer; not Intel) | ✅ Available (early) | [`macos/`](macos) (Swift, SwiftUI, AppKit) |
 | Windows | 🗓 Planned | `windows/` (Rust) |
 | Linux | 🗓 Planned | `linux/` (Rust) |
 
@@ -29,7 +29,8 @@ cloud, no telemetry.
   Hindi" or "summarize"; with nothing selected, say what to write and Kudu drafts it.
 - **Styles per app:** Formal, Casual or Very casual for personal messages, work messages and
   email, plus an editing strength from Verbatim to Polished.
-- **Hold to talk** on fn, Right ⌘ or Right ⌥. Double-tap for hands-free; Escape cancels.
+- **Hold to talk** on fn, or any shortcut you set in Settings (Right ⌥, ⌃⌥, ⌥Space…). Double-tap
+  for hands-free; Escape cancels. Command mode and paste-last shortcuts are customizable too.
 - **Works in every app.** Uses Accessibility insertion where it works and a clipboard paste
   elsewhere. Your clipboard is restored afterwards, and the paste key follows your keyboard layout.
 - **Cleans up as you speak:**

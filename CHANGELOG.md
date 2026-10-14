@@ -3,6 +3,16 @@
 All notable changes to Kudu are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com) and the project uses [Semantic Versioning](https://semver.org).
 
+## [0.8.0] - 2026-10-14
+### Added
+- **Customizable shortcuts.** Settings → Shortcuts: click Change and press the keys you want
+  for dictation, Command mode and paste last transcript. Modifier keys alone (fn, Right ⌥,
+  ⌃⌥) are held to talk; a key with modifiers (⌥Space) works too. The same shortcut engine
+  runs on Windows and Linux.
+
+### Changed
+- Kudu for Mac is for Apple Silicon (M1 or newer) only.
+
 ## [0.7.0] - 2026-10-14
 ### Added
 - **"Added to dictionary" in the pill.** When you fix a word Kudu got wrong, the pill shows

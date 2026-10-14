@@ -31,8 +31,8 @@
 
 ## v0.4: polish
 - [ ] Confirm each paste actually landed; otherwise leave the text on the clipboard and say so
-- [ ] Microphone picker
-- [ ] Custom shortcut recorder
+- [x] Microphone picker
+- [x] Custom shortcut recorder
 - [ ] Vocabulary biasing in the speech model from the personal dictionary
 - [ ] Undo the last dictation
 - [ ] Optionally pause media playback while dictating

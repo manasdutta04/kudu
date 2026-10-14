@@ -4,7 +4,8 @@ The native macOS app: Swift, SwiftUI and AppKit, living in the menu bar. All com
 run from this `macos/` folder.
 
 ## Requirements
-- macOS 14 or later, on Apple Silicon.
+- macOS 14 or later, on Apple Silicon (M1 or newer). Intel Macs are not supported: Kudu relies
+  on the Neural Engine for speech and on Apple Intelligence for formatting.
 - Swift 6.2+ toolchain. The Command Line Tools are enough; Xcode is optional and can open
   `Package.swift` directly.
 
