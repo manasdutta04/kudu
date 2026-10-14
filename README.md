@@ -1,18 +1,36 @@
 # Kudu
 
-Private, fast voice dictation for macOS. Hold **fn**, speak, release: clean text appears
-wherever your cursor is, in any app. Everything runs on your Mac. No account, no cloud and
-no telemetry.
+**Private, fast voice dictation for macOS.** Hold **fn**, speak, release: clean text appears
+wherever your cursor is, in any app. Everything runs on your Mac. No account, no cloud, no
+telemetry.
 
-- **On-device speech recognition:** NVIDIA Parakeet TDT 0.6B v2 on the Apple Neural Engine (via FluidAudio).
-- **Fast:** text arrives about 50–80 ms after you release the key (M4, 4–13 s clips).
-- **Light:** the app is about 11 MB. The speech model (about 450 MB) downloads once on first launch.
-- **Native:** Swift, SwiftUI and AppKit. Lives in the menu bar.
+| | |
+|---|---|
+| ⚡ **Fast** | Text lands ~50–80 ms after you release the key (measured on M4 with 4–13 s clips) |
+| 🔒 **Private** | Speech recognition runs on the Apple Neural Engine; audio never leaves memory |
+| 🪶 **Light** | ~11 MB app; the speech model (~450 MB) downloads once, then works offline |
+| 🍎 **Native** | Swift, SwiftUI and AppKit. Lives in the menu bar |
 
+## Features
+- **Hold to talk** on fn, Right ⌘ or Right ⌥. Double-tap for hands-free; Escape cancels.
+- **Works in every app.** Uses Accessibility insertion where it works and a clipboard paste
+  elsewhere. Your clipboard is restored afterwards, and the paste key follows your keyboard layout.
+- **Cleans up as you speak:**
+  - Removes "um" and "uh".
+  - Applies corrections: "Tuesday, no, Wednesday" → "Wednesday".
+  - Understands "new line" and "new paragraph".
+  - Writes times properly ("10:30").
+  - Fits capitalization and spacing to the text around the cursor, and is code-aware in editors and terminals.
+- **Personal dictionary** for names and jargon the model mishears.
+- **Snippets:** say "my email" and get your address. Supports `{date}`, `{time}` and `{clipboard}`.
+- **History** of recent dictations, including the raw transcript, kept in memory only.
+- Sounds, open at login, a warning when your mic is silent.
+
+See the [roadmap](docs/ROADMAP.md) for what's next.
 
 ## Requirements
 - macOS 14 or later, on Apple Silicon.
-- Swift 6.2+ toolchain. The Command Line Tools are enough; Xcode is not required.
+- Swift 6.2+ toolchain. The Command Line Tools are enough; Xcode is optional.
 
 ## Build & run
 ```bash
@@ -30,17 +48,15 @@ KUDU_SIGN_IDENTITY="My Dev Cert" scripts/build-app.sh
 
 ## Test & benchmark
 ```bash
-swift test                                       # text-pipeline unit tests
+swift test                                       # cleanup pipeline unit tests
 swift run -c release kudu-bench clip.wav ...     # per-clip latency through the real engine
 ```
 
-## Layout
-| Path | What |
-|---|---|
-| `Sources/KuduCore` | Pure text-cleanup pipeline, unit-tested |
-| `Sources/KuduKit` | Hotkey (CGEventTap), audio capture, Parakeet engine, text insertion, overlay, permissions |
-| `Sources/Kudu` | Menu-bar app and onboarding |
-| `Sources/KuduBench` | Command-line latency harness |
+## Project
+- [Architecture](docs/ARCHITECTURE.md)
+- [Roadmap](docs/ROADMAP.md)
+- [Privacy](PRIVACY.md)
+- [Contributing](CONTRIBUTING.md)
 
 ## Credits
 - [FluidAudio](https://github.com/FluidInference/FluidAudio): Apache-2.0.
