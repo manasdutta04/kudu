@@ -1,4 +1,5 @@
 import AppKit
+import Carbon.HIToolbox
 import ApplicationServices
 import os
 
@@ -130,7 +131,7 @@ public final class TextInserter {
 
     private func postCommandV() {
         let source = CGEventSource(stateID: .combinedSessionState)
-        let vKey: CGKeyCode = 9 // kVK_ANSI_V
+        let vKey = KeyboardLayout.keyCode(for: "v", fallback: CGKeyCode(kVK_ANSI_V))
         let down = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: true)
         let up = CGEvent(keyboardEventSource: source, virtualKey: vKey, keyDown: false)
         // Set flags explicitly so a still-held trigger key (fn, ⌥) doesn't turn this into another shortcut.
