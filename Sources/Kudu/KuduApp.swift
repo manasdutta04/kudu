@@ -29,10 +29,32 @@ struct KuduApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let controller = DictationController()
 
+    private var signalSources: [DispatchSourceSignal] = []
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        restoreSystemStateOnSignals()
         controller.activate()
         if !Permissions.accessibilityGranted || !Permissions.microphoneGranted || controller.modelState == .missing {
             OnboardingWindow.open()
+        }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        controller.shutdown()
+    }
+
+    /// `killall Kudu`, logout and Ctrl-C send signals that skip applicationWillTerminate.
+    /// Catch them so the 🌐 key's own action is always given back.
+    private func restoreSystemStateOnSignals() {
+        for sig in [SIGTERM, SIGINT, SIGHUP] {
+            signal(sig, SIG_IGN)
+            let source = DispatchSource.makeSignalSource(signal: sig, queue: .main)
+            source.setEventHandler { [weak self] in
+                MainActor.assumeIsolated { self?.controller.shutdown() }
+                exit(0)
+            }
+            source.resume()
+            signalSources.append(source)
         }
     }
 }

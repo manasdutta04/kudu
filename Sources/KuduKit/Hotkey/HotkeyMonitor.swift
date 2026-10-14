@@ -103,14 +103,19 @@ public final class HotkeyMonitor: @unchecked Sendable {
         let mask: CGEventMask =
             (1 << CGEventType.flagsChanged.rawValue) | (1 << CGEventType.keyDown.rawValue)
         let refcon = Unmanaged.passUnretained(self).toOpaque()
-        guard let tap = CGEvent.tapCreate(
-            tap: .cgSessionEventTap,
-            place: .headInsertEventTap,
-            options: .defaultTap,
-            eventsOfInterest: mask,
-            callback: hotkeyTapCallback,
-            userInfo: refcon
-        ) else {
+        // Prefer the HID-level tap: it sees fn before the rest of the system does. Fall back to
+        // the session tap if the HID tap can't be created.
+        let created = [CGEventTapLocation.cghidEventTap, .cgSessionEventTap].lazy.compactMap { location in
+            CGEvent.tapCreate(
+                tap: location,
+                place: .headInsertEventTap,
+                options: .defaultTap,
+                eventsOfInterest: mask,
+                callback: hotkeyTapCallback,
+                userInfo: refcon
+            )
+        }.first
+        guard let tap = created else {
             log.error("CGEvent.tapCreate failed; Accessibility permission missing?")
             return false
         }

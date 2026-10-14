@@ -29,6 +29,15 @@ public final class DictationController: ObservableObject {
         didSet {
             hotkey.trigger = trigger
             UserDefaults.standard.set(trigger.rawValue, forKey: Keys.trigger)
+            updateFnGuard()
+        }
+    }
+    /// While fn is the dictation key, pause the system's 🌐 action (emoji picker) so taps and
+    /// double-taps don't open it. Restored when Kudu quits.
+    @Published public var preventEmojiPicker: Bool {
+        didSet {
+            UserDefaults.standard.set(preventEmojiPicker, forKey: Keys.preventEmojiPicker)
+            updateFnGuard()
         }
     }
     @Published public var recordingMode: RecordingMode {
@@ -53,6 +62,7 @@ public final class DictationController: ObservableObject {
     private let inserter = TextInserter()
     private let overlay = OverlayPanel()
     private let sounds = SoundCues()
+    private let fnGuard = FnKeyGuard()
     public let store: UserDataStore
     private var recordingStartedAt: ContinuousClock.Instant?
     private var transcriptionTask: Task<Void, Never>?
@@ -71,6 +81,7 @@ public final class DictationController: ObservableObject {
         static let keepMicWarm = "keepMicWarm"
         static let soundsEnabled = "soundsEnabled"
         static let recordingMode = "recordingMode"
+        static let preventEmojiPicker = "preventEmojiPicker"
     }
 
     public init(store: UserDataStore = UserDataStore()) {
@@ -79,6 +90,7 @@ public final class DictationController: ObservableObject {
         let trigger = defaults.string(forKey: Keys.trigger).flatMap(TriggerKey.init(rawValue:)) ?? .fn
         self.trigger = trigger
         self.keepMicWarm = defaults.bool(forKey: Keys.keepMicWarm)
+        self.preventEmojiPicker = defaults.object(forKey: Keys.preventEmojiPicker) as? Bool ?? true
         self.recordingMode = defaults.string(forKey: Keys.recordingMode)
             .flatMap(RecordingMode.init(rawValue:)) ?? .holdOrDoubleTap
         self.soundsEnabled = defaults.object(forKey: Keys.soundsEnabled) as? Bool ?? true
@@ -98,8 +110,24 @@ public final class DictationController: ObservableObject {
             recorder.prepare()
         }
         hotkeyActive = Permissions.accessibilityGranted && hotkey.start()
+        updateFnGuard()
         if case .missing = modelState, ParakeetEngine.isDownloaded {
             Task { await loadModel() }
+        }
+    }
+
+    /// Call when the app is quitting: gives the 🌐 key its normal action back.
+    public func shutdown() {
+        fnGuard.disengage()
+        hotkey.stop()
+    }
+
+    private func updateFnGuard() {
+        if hotkeyActive && trigger == .fn && preventEmojiPicker {
+            fnGuard.engage()
+        } else {
+            // Also cleans up after a previous run that was killed while engaged.
+            fnGuard.disengage()
         }
     }
 

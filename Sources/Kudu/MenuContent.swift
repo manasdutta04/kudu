@@ -52,6 +52,10 @@ struct MenuContent: View {
             Picker("Dictation key", selection: $controller.trigger) {
                 ForEach(TriggerKey.allCases) { key in Text(key.displayName).tag(key) }
             }
+            if controller.trigger == .fn {
+                Toggle("Stop fn from opening the emoji picker", isOn: $controller.preventEmojiPicker)
+                    .help("While Kudu is running, the 🌐 key's own action is paused. Quitting Kudu restores it.")
+            }
             Picker("Recording", selection: $controller.recordingMode) {
                 ForEach(RecordingMode.allCases) { mode in Text(mode.title).tag(mode) }
             }
