@@ -36,7 +36,12 @@ public struct SnippetStage: TextStage {
     }
 
     public func apply(_ text: String, context: TextContext) -> String {
-        guard !snippets.isEmpty, let expansion = snippets[Self.key(text)] else { return text }
+        match(text) ?? text
+    }
+
+    /// The expansion if the whole dictation is a snippet trigger, otherwise nil.
+    public func match(_ text: String) -> String? {
+        guard !snippets.isEmpty, let expansion = snippets[Self.key(text)] else { return nil }
         return fill(expansion)
     }
 
