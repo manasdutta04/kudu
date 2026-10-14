@@ -36,3 +36,60 @@ jobs:
 
       - name: App size
         run: du -sh build/Kudu.app
+
+  desktop:
+    name: ${{ matrix.name }} app
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            os: windows-latest
+          - name: Linux
+            os: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Linux packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends pkg-config cmake libasound2-dev libssl-dev \
+            libxkbcommon-dev libwayland-dev libx11-dev libdbus-1-dev libudev-dev
+
+      - name: Toolchain
+        run: rustup update stable && rustup default stable && cargo --version
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            desktop/target
+          key: cargo-${{ runner.os }}-${{ hashFiles('desktop/Cargo.lock') }}
+
+      - name: Tests
+        run: cargo test --workspace
+
+      - name: Lints
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Release build
+        run: cargo build --release -p kudu-app
+
+      - name: Size
+        shell: bash
+        run: ls -la target/release/kudu* | grep -v '\.d$'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kudu-${{ runner.os }}
+          path: |
+            desktop/target/release/kudu
+            desktop/target/release/kudu.exe
+          if-no-files-found: ignore
