@@ -49,12 +49,6 @@ public final class DictationController: ObservableObject {
             UserDefaults.standard.set(soundsEnabled, forKey: Keys.soundsEnabled)
         }
     }
-    @Published public var keepMicWarm: Bool {
-        didSet {
-            recorder.keepWarm = keepMicWarm
-            UserDefaults.standard.set(keepMicWarm, forKey: Keys.keepMicWarm)
-        }
-    }
 
     private let hotkey: HotkeyMonitor
     private let recorder = AudioRecorder()
@@ -85,7 +79,6 @@ public final class DictationController: ObservableObject {
 
     private enum Keys {
         static let trigger = "triggerKey"
-        static let keepMicWarm = "keepMicWarm"
         static let soundsEnabled = "soundsEnabled"
         static let recordingMode = "recordingMode"
         static let preventEmojiPicker = "preventEmojiPicker"
@@ -97,7 +90,8 @@ public final class DictationController: ObservableObject {
         let defaults = UserDefaults.standard
         let trigger = defaults.string(forKey: Keys.trigger).flatMap(TriggerKey.init(rawValue:)) ?? .fn
         self.trigger = trigger
-        self.keepMicWarm = defaults.bool(forKey: Keys.keepMicWarm)
+        // The always-warm microphone option was removed: the mic is open only while dictating.
+        defaults.removeObject(forKey: "keepMicWarm")
         self.preventEmojiPicker = defaults.object(forKey: Keys.preventEmojiPicker) as? Bool ?? true
         self.recordingMode = defaults.string(forKey: Keys.recordingMode)
             .flatMap(RecordingMode.init(rawValue:)) ?? .holdOrDoubleTap
@@ -115,7 +109,6 @@ public final class DictationController: ObservableObject {
     /// Call once at launch, and again after permissions change.
     public func activate() {
         if Permissions.microphoneGranted {
-            recorder.keepWarm = keepMicWarm
             recorder.prepare()
         }
         hotkeyActive = Permissions.accessibilityGranted && hotkey.start()

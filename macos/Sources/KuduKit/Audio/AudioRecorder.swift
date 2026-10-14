@@ -3,29 +3,15 @@ import os
 
 /// Captures microphone audio as 16 kHz mono Float32, the format Parakeet expects.
 ///
-/// Latency notes:
-/// - The engine is built and `prepare()`d ahead of time, so `start()` only has to start the
-///   audio unit.
-/// - After each dictation the engine stays running for `warmWindow` (60 s), keeping the last
-///   `preRollSeconds` of audio, so a follow-up dictation never clips its first syllable.
-/// - With `keepWarm` it stays running all the time. Both keep the macOS microphone indicator
-///   on while warm; the audio is only ever held in memory.
+/// The microphone is open only while a dictation is being recorded: `start()` opens it and
+/// `stop()` closes it, so the macOS microphone indicator is never on otherwise. The engine is
+/// `prepare()`d ahead of time (and again after each stop) so opening it is quick.
 public final class AudioRecorder: @unchecked Sendable {
     public static let sampleRate: Double = 16_000
 
     /// Called on the audio thread with the raw RMS amplitude of each captured buffer (~20 ms).
     public var onLevel: (@Sendable (Float) -> Void)?
 
-    public var keepWarm = false {
-        didSet {
-            let warm = keepWarm
-            state.withLock { $0.keepWarm = warm }
-            warm ? warmUp() : coolDownIfIdle()
-        }
-    }
-    public var preRollSeconds: Double = 0.3
-    /// How long the microphone stays warm after a dictation. 0 turns it off.
-    public var warmWindow: TimeInterval = 60
 
     private let engine = AVAudioEngine()
     private let targetFormat = AVAudioFormat(
@@ -37,14 +23,8 @@ public final class AudioRecorder: @unchecked Sendable {
     private struct State {
         var isRecording = false
         var samples: [Float] = []
-        var preRoll: [Float] = []
-        var keepWarm = false
-        /// Inside the warm window after a dictation: keep collecting pre-roll.
-        var warmAfterUse = false
         var startRequestedAt: ContinuousClock.Instant?
     }
-    /// Invalidates earlier cool-down timers when a new dictation starts.
-    private var warmGeneration = 0
     private let state = OSAllocatedUnfairLock(initialState: State())
     private let log = Logger(subsystem: "app.kudu", category: "audio")
     private var configObserver: NSObjectProtocol?
@@ -68,14 +48,12 @@ public final class AudioRecorder: @unchecked Sendable {
     }
 
     public func start() throws {
-        warmGeneration += 1
-        let wasRunning = engine.isRunning
         state.withLock { state in
             state.isRecording = true
-            state.samples = state.preRoll
+            state.samples = []
             state.samples.reserveCapacity(Int(Self.sampleRate) * 30)
-            // Measure how long a cold microphone takes to deliver audio (Bluetooth is slow).
-            state.startRequestedAt = wasRunning ? nil : .now
+            // Measure how long the microphone takes to deliver audio (Bluetooth is slow).
+            state.startRequestedAt = .now
         }
         installTapIfNeeded()
         if !engine.isRunning {
@@ -87,11 +65,10 @@ public final class AudioRecorder: @unchecked Sendable {
     public func stop() -> [Float] {
         let samples = state.withLock { state -> [Float] in
             state.isRecording = false
-            state.warmAfterUse = warmWindow > 0
             defer { state.samples = [] }
             return state.samples
         }
-        scheduleCoolDown()
+        closeMicrophone()
         return samples
     }
 
@@ -99,30 +76,12 @@ public final class AudioRecorder: @unchecked Sendable {
 
     // MARK: - Private
 
-    private func warmUp() {
-        installTapIfNeeded()
-        if !engine.isRunning { try? engine.start() }
-    }
-
-    private func coolDownIfIdle() {
-        guard !keepWarm, !isRecording, engine.isRunning else { return }
-        guard !state.withLock({ $0.warmAfterUse }) else { return }
-        engine.pause()
-        state.withLock { $0.preRoll = [] }
-    }
-
-    /// Ends the warm window `warmWindow` seconds after the last dictation.
-    private func scheduleCoolDown() {
-        guard warmWindow > 0 else {
-            coolDownIfIdle()
-            return
-        }
-        let generation = warmGeneration
-        DispatchQueue.main.asyncAfter(deadline: .now() + warmWindow) { [weak self] in
-            guard let self, self.warmGeneration == generation else { return }
-            self.state.withLock { $0.warmAfterUse = false }
-            self.coolDownIfIdle()
-        }
+    /// Stops the audio hardware (the microphone indicator goes off) and prepares the engine
+    /// again so the next `start()` is fast.
+    private func closeMicrophone() {
+        guard engine.isRunning else { return }
+        engine.stop()
+        engine.prepare()
     }
 
     private func installTapIfNeeded() {
@@ -151,22 +110,13 @@ public final class AudioRecorder: @unchecked Sendable {
         let rms = chunk.isEmpty ? 0 : (sum / Float(chunk.count)).squareRoot()
         onLevel?(rms)
 
-        let preRollLimit = Int(preRollSeconds * Self.sampleRate)
         let samples = Array(chunk)
         let startupDelay = state.withLock { state -> Duration? in
-            if state.isRecording {
-                state.samples.append(contentsOf: samples)
-                if let requested = state.startRequestedAt {
-                    state.startRequestedAt = nil
-                    return ContinuousClock.now - requested
-                }
-            } else if state.keepWarm || state.warmAfterUse {
-                state.preRoll.append(contentsOf: samples)
-                if state.preRoll.count > preRollLimit {
-                    state.preRoll.removeFirst(state.preRoll.count - preRollLimit)
-                }
-            }
-            return nil
+            guard state.isRecording else { return nil }
+            state.samples.append(contentsOf: samples)
+            guard let requested = state.startRequestedAt else { return nil }
+            state.startRequestedAt = nil
+            return ContinuousClock.now - requested
         }
         if let startupDelay {
             log.info("Microphone delivered first audio after \(Int(startupDelay / .milliseconds(1))) ms")
@@ -200,7 +150,7 @@ public final class AudioRecorder: @unchecked Sendable {
     /// for the new hardware format.
     private func handleConfigurationChange() {
         log.info("Audio configuration changed; rebuilding input tap")
-        let wasRunning = isRecording || keepWarm
+        let wasRunning = isRecording
         engine.stop()
         if tapInstalled {
             engine.inputNode.removeTap(onBus: 0)

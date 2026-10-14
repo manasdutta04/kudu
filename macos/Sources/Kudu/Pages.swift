@@ -218,8 +218,7 @@ struct SettingsPage: View {
 
                 Section("Feedback & microphone") {
                     Toggle("Sounds", isOn: $controller.soundsEnabled)
-                    Toggle("Keep microphone always warm", isOn: $controller.keepMicWarm)
-                    Text("The microphone stays warm for a minute after each dictation so the next one starts instantly. Audio is only ever held in memory.")
+                    Text("The microphone is on only while you dictate. Audio is held in memory and never saved.")
                         .font(.caption).foregroundStyle(.secondary)
                 }
 
