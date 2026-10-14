@@ -42,6 +42,7 @@ struct OnboardingView: View {
                     Permissions.openSettings(.accessibility)
                 }
             }
+            accessibilityHelp
 
             Step(
                 number: 3, title: "Speech model",
@@ -51,9 +52,17 @@ struct OnboardingView: View {
                 modelAction
             }
 
-            HStack {
-                Spacer()
-                Text("Hold \(controller.trigger.displayName) anywhere to dictate.")
+            Divider()
+
+            VStack(alignment: .leading, spacing: 8) {
+                Text("How do you want to dictate?").font(.headline)
+                Picker("Key", selection: $controller.trigger) {
+                    ForEach(TriggerKey.allCases) { key in Text(key.displayName).tag(key) }
+                }
+                Picker("Recording", selection: $controller.recordingMode) {
+                    ForEach(RecordingMode.allCases) { mode in Text(mode.title).tag(mode) }
+                }
+                Text(controller.recordingMode.hint(for: controller.trigger))
                     .font(.callout).foregroundStyle(.secondary)
             }
         }
@@ -66,6 +75,34 @@ struct OnboardingView: View {
                 permissions.accessibility = ax
                 controller.activate()
             }
+        }
+    }
+
+    /// Kudu is listed and switched on in System Settings but macOS still doesn't trust it.
+    /// That happens when the entry belongs to an older build of the app.
+    @ViewBuilder private var accessibilityHelp: some View {
+        if !permissions.accessibility {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "questionmark.circle").foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Already switched on but still not detected? The entry belongs to an older copy of Kudu. Reset it, then switch Kudu on again.")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button("Reset permission") {
+                        Permissions.resetAccessibility()
+                        Permissions.openSettings(.accessibility)
+                    }
+                    .controlSize(.small)
+                }
+            }
+            .padding(.leading, 38)
+        } else if !controller.hotkeyActive {
+            HStack(spacing: 8) {
+                Text("Accessibility is on. Relaunch Kudu to start listening for the dictation key.")
+                    .font(.caption).foregroundStyle(.secondary)
+                Button("Relaunch") { Permissions.relaunch() }.controlSize(.small)
+            }
+            .padding(.leading, 38)
         }
     }
 

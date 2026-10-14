@@ -24,6 +24,30 @@ public enum Permissions {
         _ = AXIsProcessTrustedWithOptions(options)
     }
 
+    /// Removes Kudu's Accessibility entry so it can be granted fresh. Needed when the entry in
+    /// System Settings belongs to an older build with a different code signature: the switch
+    /// shows "on" but macOS doesn't trust this copy of the app.
+    public static func resetAccessibility() {
+        guard let bundleID = Bundle.main.bundleIdentifier else { return }
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+        task.arguments = ["reset", "Accessibility", bundleID]
+        try? task.run()
+        task.waitUntilExit()
+        requestAccessibility()
+    }
+
+    /// Starts a fresh copy of Kudu and quits this one. macOS applies a new Accessibility
+    /// grant to the keyboard event tap reliably only after a relaunch.
+    public static func relaunch() {
+        let path = Bundle.main.bundlePath
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/sh")
+        task.arguments = ["-c", "sleep 0.5; /usr/bin/open \"$0\"", path]
+        try? task.run()
+        NSApp.terminate(nil)
+    }
+
     public static func openSettings(_ pane: Pane) {
         let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?\(pane.rawValue)")!
         NSWorkspace.shared.open(url)
