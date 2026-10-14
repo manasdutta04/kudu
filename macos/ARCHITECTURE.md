@@ -94,11 +94,12 @@ fn up   ─▶ AudioRecorder.stop ─▶ final transcription ─▶ reuse format
 ### Screen context (`KuduKit/Context`, `KuduCore/TermExtractor`)
 1. **Read.** When recording starts, `ScreenContext` walks the focused window through Accessibility off the main thread (at most 150 ms and 400 elements) and collects its visible text.
 2. **Extract.** `TermExtractor` keeps names, @handles and code identifiers (top 40). They are passed to the formatter as spelling hints.
-3. **Respell.** After transcription, `ScreenSpeller` replaces a word with an on-screen term when the casing differs only (github → GitHub), or when the system spell checker doesn't know the word and it sounds like the term (Sidarth → Siddharth). Real words are never touched. Nothing is stored.
+3. **Respell.** After transcription, `TermSpeller` (with the system spell checker) replaces a word with an on-screen term when the casing differs only (github → GitHub), or when the system spell checker doesn't know the word and it sounds like the term (Sidarth → Siddharth). Dictionary words get the same treatment, plus joining split words ("heat map" → heatmap) and sound-alike names mid-sentence (Pia → Priya). Real words are never touched. Nothing is stored.
+4. **Electron and Chromium apps.** `AppAccessibility` sets `AXManualAccessibility` on such apps when they become active, so their text is readable for screen terms, learning and Command mode.
 
 ### Learning from corrections (`KuduKit/Learning`, `KuduCore/CorrectionLearner`)
 1. **Snapshot.** After inserting text, `EditObserver` snapshots the field through Accessibility and finds the inserted text by the unchanged text around it.
-2. **Watch.** It polls every 1.5 s for up to 45 s, and stops when focus moves or the text around it changes.
+2. **Watch.** It polls every second for up to 60 s, follows web fields that re-create their element, and stops when you switch apps or the text around it changes. A correction is learned as soon as the edit is unchanged for two checks, and the pill shows "Added to dictionary" with Undo.
 3. **Compare.** `CorrectionLearner` word-aligns what Kudu typed with the user's edited version.
 4. **Decide.** It keeps 1–3-word substitutions that look like a fixed spelling of a name or term: letter similarity, a matching consonant-sound key, or a proper-noun capitalization. Rewording, everyday words, numbers and rewrites are ignored.
 5. **Save.** Learned words go into the dictionary marked ✦ and are used from the next dictation.

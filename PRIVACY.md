@@ -19,12 +19,15 @@ Kudu is built so that what you say stays on your Mac.
   you dictate into) are saved in `usage.json` in the same folder. They contain no text, so
   they are kept when old history is deleted.
 - **Learning from corrections:** after a dictation Kudu reads the text field it typed into, for
-  up to 45 seconds and only until you move elsewhere, to notice if you fix a word it got wrong.
+  up to 60 seconds and only until you switch apps, to notice if you fix a word it got wrong.
   Only the corrected word is saved, to your dictionary. You can turn this off in Settings.
 - **Screen context:** when you start dictating, Kudu reads the visible text of the window you
   are in through Accessibility (for at most 150 ms) and keeps only names and terms, in memory,
   so it can spell them the way they appear. Nothing is saved, and it's discarded after the
   dictation.
+- **Apps built on Electron or Chromium** (Slack, VS Code, Notion, browsers and others) only
+  show their text to Accessibility when asked, so Kudu turns that on for them when they become
+  active. It's the same switch screen readers use; nothing is read until you dictate.
 - **Settings, dictionary and snippets** are saved as JSON files in the same folder.
 
 ## Network access

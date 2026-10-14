@@ -3,6 +3,25 @@
 All notable changes to Kudu are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com) and the project uses [Semantic Versioning](https://semver.org).
 
+## [0.7.0] - 2026-10-14
+### Added
+- **"Added to dictionary" in the pill.** When you fix a word Kudu got wrong, the pill shows
+  what it learned, with Undo.
+- **Sound-alike spelling.** Words the speech model misheard are matched by sound against your
+  dictionary and the names on screen: "hitmap" → heatmap, "heat map" → heatmap, "super base" →
+  Supabase, "Pia" → Priya (when Priya is in your dictionary).
+- **Spoken file names:** "use case dot ts" → useCase.ts, "read me dot md" → README.md.
+
+### Changed
+- Learning, screen names and Command mode now work in Electron and Chromium apps (chat apps,
+  Slack, VS Code, Notion, browsers): Kudu asks them to expose their text to Accessibility.
+- Corrections are learned as soon as your edit settles, within 60 seconds of dictating.
+- "tag Priya" → @Priya in docs and other apps too (not in email or code).
+
+### Fixed
+- Command mode: "fix this" with nothing selected now asks you to select the text, instead of
+  writing something unrelated; the model's prompt can no longer be pasted.
+
 ## [0.6.0] - 2026-10-14
 ### Added
 - **Formats like a native writer in every app.** Spoken lists become bullets under a heading,
