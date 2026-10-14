@@ -6,9 +6,9 @@ cloud, no telemetry.
 
 | | |
 |---|---|
-| ⚡ **Fast** | Text lands ~130–150 ms after you release the key (Apple M4) |
+| ⚡ **Fast** | Text lands ~130–150 ms after you release the key; long dictations get smart formatting in ~1 s (Apple M4) |
 | 🔒 **Private** | Audio never leaves your computer |
-| 🪶 **Light** | ~12 MB app; the speech model (~450 MB) downloads once, then works offline |
+| 🪶 **Light** | ~14 MB app; the speech model (~450 MB) downloads once, then works offline |
 | 🧩 **Native** | A native app per platform, not a web wrapper |
 
 ## Platforms
@@ -20,6 +20,11 @@ cloud, no telemetry.
 | Linux | 🗓 Planned | `linux/` (Rust) |
 
 ## Features
+- **A real Mac app:** a Dock icon, a Home dashboard with your words, speed, streak and full
+  history, plus an animated menu-bar icon that moves with your voice.
+- **Smart formatting on device:** punctuation, paragraphs, numbered lists and numbers
+  written properly ("three thirty" → 3:30), using Apple's on-device model, without changing
+  your words.
 - **Hold to talk** on fn, Right ⌘ or Right ⌥. Double-tap for hands-free; Escape cancels.
 - **Works in every app.** Uses Accessibility insertion where it works and a clipboard paste
   elsewhere. Your clipboard is restored afterwards, and the paste key follows your keyboard layout.
@@ -31,7 +36,7 @@ cloud, no telemetry.
   - Fits capitalization and spacing to the text around the cursor, and is code-aware in editors and terminals.
 - **Personal dictionary** for names and jargon the model mishears.
 - **Snippets:** say "my email" and get your address. Supports `{date}`, `{time}` and `{clipboard}`.
-- **History** of recent dictations, including the raw transcript, kept in memory only.
+- **History** saved only on your Mac, searchable by day, with the raw transcript.
 - A small frosted-glass pill with a live waveform; sounds; open at login.
 
 See the [roadmap](docs/ROADMAP.md) for what's next.

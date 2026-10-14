@@ -7,10 +7,15 @@ Kudu is built so that what you say stays on your Mac.
   is locked on). It is held in memory, transcribed on your Mac, and then discarded. Audio is
   never written to disk.
 - **Speech recognition** runs locally on the Apple Neural Engine.
-- **Text** is inserted into the app you are using. The last few dictations are kept in
-  memory so you can copy them again; they are gone when Kudu quits.
-- **Settings, dictionary and snippets** are saved as JSON files in
-  `~/Library/Application Support/Kudu`.
+- **Smart formatting** (punctuation, paragraphs, lists) uses Apple's on-device language model
+  on macOS 26 and later. The text never leaves your Mac.
+- **Text** is inserted into the app you are using.
+- **History:** each dictation (the transcript, the final text, its length and timing, and
+  which app it went to) is saved on this Mac in
+  `~/Library/Application Support/Kudu/history.jsonl`, so the Home page can show it with your
+  stats. It is kept for 90 days by default; choose 30 days, 90 days or forever, or clear it,
+  in Settings.
+- **Settings, dictionary and snippets** are saved as JSON files in the same folder.
 
 ## Network access
 Kudu connects to the internet once, to download the speech model on first launch. After
@@ -29,7 +34,8 @@ When fn is the dictation key, Kudu sets **System Settings → Keyboard → "Pres
 saved first and put back the moment Kudu quits (or the next time it starts, if it crashed).
 You can turn this off in Kudu's menu.
 
-## Optional "Keep microphone warm"
-When enabled, the microphone stays open between dictations so recording starts instantly.
-macOS shows the orange microphone indicator the whole time. Audio captured while idle is
-kept only as a rolling 0.3-second buffer in memory, so the first syllable isn't cut off.
+## Warm microphone
+After each dictation the microphone stays open for one minute, so a follow-up dictation starts
+instantly and keeps its first syllable. "Keep microphone always warm" in Settings leaves it
+open all the time. Either way macOS shows the orange microphone indicator while it is open,
+and audio captured while idle is kept only as a rolling 0.3-second buffer in memory.

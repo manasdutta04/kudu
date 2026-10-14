@@ -30,18 +30,27 @@ KUDU_SIGN_IDENTITY="My Dev Cert" scripts/build-app.sh
 
 ## Test & benchmark
 ```bash
-swift test                                       # cleanup pipeline unit tests
+swift test                                       # unit tests
 swift run -c release kudu-bench clip.wav ...     # per-clip latency through the real engine
 open build/Kudu.app --args --overlay-demo        # preview the overlay pill in every state
+swift run -c release kudu-bench --format --text "so the plan is first we ship"   # try smart formatting
+```
+
+## App icon
+The icon is generated from the master logo `public/kudu-icon.png`. Re-run after changing the
+artwork (from the repository root):
+```bash
+swift macos/scripts/make-app-icon.swift
 ```
 
 ## Layout
 | Path | What |
 |---|---|
-| `Sources/KuduCore` | Pure logic: text-cleanup pipeline and 🌐-key guard, unit-tested |
-| `Sources/KuduKit` | System integration: hotkey, audio, Parakeet engine, insertion, overlay, storage |
-| `Sources/Kudu` | Menu-bar app, onboarding and settings |
-| `Sources/KuduBench` | Command-line latency harness |
+| `Sources/KuduCore` | Pure logic: cleanup pipeline, formatting guard, usage stats, 🌐-key guard, unit-tested |
+| `Sources/KuduKit` | System integration: hotkey, audio, Parakeet engine, smart formatting, insertion, overlay, history, branding |
+| `Sources/Kudu` | The app: main window (Home, Dictionary, Snippets, Style, Settings), menu bar, onboarding |
+| `Sources/KuduBench` | Command-line latency and formatting harness |
+| `Resources/` | App icon, generated from `public/kudu-icon.png` |
 | `Tests/` | Unit tests (Swift Testing) |
 | `scripts/` | Build and signing scripts |
 
