@@ -4,6 +4,7 @@
 //   swift run -c release kudu-bench clip1.wav clip2.wav
 //   swift run -c release kudu-bench --format clip1.wav          (also run smart formatting)
 //   swift run -c release kudu-bench --format --text "raw words"  (format text, no audio)
+//   swift run -c release kudu-bench --command "instruction" ["selected text"]   (Command mode)
 //   swift run -c release kudu-bench --stream clip.wav             (replay in real time, as if spoken;
 //                                                                  measures release → text like the app)
 import AVFoundation
@@ -33,6 +34,18 @@ func loadSamples(_ url: URL) throws -> [Float] {
 }
 
 var arguments = Array(CommandLine.arguments.dropFirst())
+if arguments.first == "--command", arguments.count >= 2 {
+    let engine = await CommandEngine()
+    let start = ContinuousClock.now
+    do {
+        let output = try await engine.run(
+            instruction: arguments[1], selection: arguments.count > 2 ? arguments[2] : nil, category: .general)
+        print(String(format: "[%.0f ms] ", (ContinuousClock.now - start) / .milliseconds(1)) + output)
+    } catch {
+        print("error: \(error.localizedDescription)")
+    }
+    exit(0)
+}
 let streamMode = arguments.contains("--stream")
 let formatting = arguments.contains("--format") || streamMode
 let textMode = arguments.contains("--text")

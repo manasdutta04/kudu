@@ -17,10 +17,12 @@ public struct DictationRecord: Codable, Identifiable, Sendable, Equatable {
     public var bundleID: String?
     /// Whether smart formatting (the on-device language model) ran.
     public var formatted: Bool
+    /// A Command mode result (an edit or draft) rather than a dictation. Nil in older records.
+    public var command: Bool?
 
     public init(
         id: UUID = UUID(), date: Date = .now, raw: String, text: String, audioSeconds: Double,
-        latencyMs: Int, bundleID: String? = nil, formatted: Bool = false
+        latencyMs: Int, bundleID: String? = nil, formatted: Bool = false, command: Bool = false
     ) {
         self.id = id
         self.date = date
@@ -31,7 +33,10 @@ public struct DictationRecord: Codable, Identifiable, Sendable, Equatable {
         self.latencyMs = latencyMs
         self.bundleID = bundleID
         self.formatted = formatted
+        self.command = command ? true : nil
     }
+
+    public var isCommand: Bool { command == true }
 }
 
 public enum WordCount {

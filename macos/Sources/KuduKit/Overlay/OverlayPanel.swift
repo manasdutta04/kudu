@@ -19,6 +19,8 @@ public final class OverlayModel: ObservableObject {
     @Published public var phase: Phase = .recording
     /// Hands-free recording: shown as a small pulsing dot instead of requiring the key.
     @Published public var isLocked = false
+    /// Command mode: the instruction is being spoken / carried out.
+    @Published public var isCommand = false
     /// Smoothed loudness history (0...1), newest first. The middle bar shows the newest value
     /// and older values ripple outward, so the wave follows the voice.
     @Published public private(set) var history: [Float] = Array(repeating: 0, count: OverlayModel.historyLength)
@@ -120,6 +122,7 @@ public final class OverlayPanel {
         if phase == .recording {
             model.resetLevels()
             model.isLocked = false
+            model.isCommand = false
         }
         guard !panel.isVisible else { return }
         position(animated: false)
@@ -210,19 +213,29 @@ struct OverlayView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity) // centered in the canvas
             .animation(.spring(response: 0.28, dampingFraction: 0.85), value: model.phase)
             .animation(.spring(response: 0.28, dampingFraction: 0.85), value: model.isLocked)
+            .animation(.spring(response: 0.28, dampingFraction: 0.85), value: model.isCommand)
     }
 
     @ViewBuilder private var content: some View {
         switch model.phase {
         case .recording:
             HStack(spacing: 7) {
-                if model.isLocked {
+                if model.isCommand {
+                    CommandSparkle().transition(.scale.combined(with: .opacity))
+                } else if model.isLocked {
                     PulsingDot().transition(.scale.combined(with: .opacity))
                 }
                 Waveform(history: model.history)
             }
         case .transcribing:
-            ThinkingDots()
+            if model.isCommand {
+                HStack(spacing: 7) {
+                    CommandSparkle()
+                    ThinkingDots(color: Color(red: 0.72, green: 0.62, blue: 1))
+                }
+            } else {
+                ThinkingDots()
+            }
         case .message(let text):
             Text(text)
                 .font(.system(size: 11, weight: .medium))
@@ -280,8 +293,20 @@ private struct PulsingDot: View {
     }
 }
 
+/// Command mode marker: a violet sparkle.
+private struct CommandSparkle: View {
+    var body: some View {
+        Image(systemName: "sparkle")
+            .font(.system(size: 10, weight: .bold))
+            .foregroundStyle(Color(red: 0.72, green: 0.62, blue: 1))
+            .shadow(color: Color(red: 0.6, green: 0.45, blue: 1).opacity(0.7), radius: 3)
+    }
+}
+
 /// Three dots that rise and fall in turn while the speech model works.
 private struct ThinkingDots: View {
+    var color: Color = .white
+
     var body: some View {
         TimelineView(.animation) { context in
             let t = context.date.timeIntervalSinceReferenceDate
@@ -289,7 +314,7 @@ private struct ThinkingDots: View {
                 ForEach(0..<3, id: \.self) { index in
                     let phase = sin((t * 2 * .pi / 0.9) - Double(index) * 0.7)
                     Circle()
-                        .fill(.white)
+                        .fill(color)
                         .frame(width: 4, height: 4)
                         .opacity(0.45 + 0.55 * (0.5 + 0.5 * phase))
                         .offset(y: -1.5 * phase)

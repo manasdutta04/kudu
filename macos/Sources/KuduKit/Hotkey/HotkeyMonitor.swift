@@ -46,6 +46,10 @@ public enum HotkeyEvent: Sendable {
     case released
     /// The hold turned out to be part of a shortcut (another key was pressed), or Escape was hit.
     case cancelled
+    /// Trigger + ⌃ held together: Command mode (speak an instruction for the selected text).
+    case commandPressed
+    /// The trigger was released after `commandPressed`.
+    case commandReleased
 }
 
 /// Watches the trigger key with a CGEventTap at session level.
@@ -66,6 +70,8 @@ public final class HotkeyMonitor: @unchecked Sendable {
         var isDictating = false
         var triggerDown = false
         var triggerDownAt: TimeInterval = 0
+        /// Trigger + ⌃ is held: the hold is a Command mode instruction.
+        var commandActive = false
         /// The physical fn key is down. Tracked separately from `triggerDown` because a hold can
         /// be cancelled (Escape, a shortcut) while fn is still held, and its release must still
         /// be swallowed.
@@ -111,8 +117,10 @@ public final class HotkeyMonitor: @unchecked Sendable {
         set { state.withLock { $0.isDictating = newValue } }
     }
 
-    /// A second modifier joining within this window means a shortcut (e.g. fn+⌃), not dictation.
+    /// A second modifier joining within this window makes a chord: ⌃ means Command mode, the
+    /// others mean a system shortcut (not dictation).
     private let chordWindow: TimeInterval = 0.3
+    private static let controlKeyCodes: Set<Int64> = [59, 62] // left, right ⌃
     private let log = Logger(subsystem: "app.kudu", category: "hotkey")
 
     // Owned by start()/stop() on the main thread and read by the tap thread after start.
@@ -196,12 +204,14 @@ public final class HotkeyMonitor: @unchecked Sendable {
             let (disposition, events) = state.withLock { state -> (Disposition, [HotkeyEvent]) in
                 if keyCode == 53 /* kVK_Escape */, state.isDictating {
                     state.triggerDown = false
+                    state.commandActive = false
                     return (.swallow, [.cancelled])
                 }
                 var events: [HotkeyEvent] = []
                 // Any regular key while the trigger is held means the user is typing a shortcut.
                 if state.triggerDown {
                     state.triggerDown = false
+                    state.commandActive = false
                     events.append(.cancelled)
                 }
                 if state.fnDown { state.fnCombo = true }
@@ -252,9 +262,15 @@ public final class HotkeyMonitor: @unchecked Sendable {
             }
 
             guard keyCode == state.trigger.keyCode else {
-                // Another modifier joined the trigger (e.g. fn+⌃): a shortcut, not dictation.
-                if state.triggerDown,
-                   ProcessInfo.processInfo.systemUptime - state.triggerDownAt < chordWindow {
+                let justPressed = ProcessInfo.processInfo.systemUptime - state.triggerDownAt < chordWindow
+                if Self.controlKeyCodes.contains(keyCode), flags.contains(.maskControl) {
+                    // ⌃ joined the trigger right after it went down: Command mode.
+                    if state.triggerDown, justPressed, !state.commandActive {
+                        state.commandActive = true
+                        events.append(.commandPressed)
+                    }
+                } else if state.triggerDown, justPressed, !state.commandActive, flags.contains(.maskCommand) || flags.contains(.maskShift) || flags.contains(.maskAlternate) {
+                    // Another modifier joined the trigger: a system shortcut, not dictation.
                     state.triggerDown = false
                     events.append(.cancelled)
                 }
@@ -264,10 +280,21 @@ public final class HotkeyMonitor: @unchecked Sendable {
             if isDown && !state.triggerDown {
                 state.triggerDown = true
                 state.triggerDownAt = ProcessInfo.processInfo.systemUptime
-                events.append(.pressed)
+                // ⌃ already held when the trigger goes down: Command mode straight away.
+                if flags.contains(.maskControl) {
+                    state.commandActive = true
+                    events.append(.commandPressed)
+                } else {
+                    events.append(.pressed)
+                }
             } else if !isDown && state.triggerDown {
                 state.triggerDown = false
-                events.append(.released)
+                if state.commandActive {
+                    state.commandActive = false
+                    events.append(.commandReleased)
+                } else {
+                    events.append(.released)
+                }
             }
             return (disposition, events, note)
         }

@@ -239,6 +239,96 @@ public final class DictationController: ObservableObject {
             isHandsFree = false
             ignoreNextRelease = false
             cancelRecording()
+        case .commandPressed:
+            beginCommand()
+        case .commandReleased:
+            finishCommand()
+        }
+    }
+
+    // MARK: - Command mode
+
+    /// Whether the current recording is a Command mode instruction.
+    @Published public private(set) var isCommandMode = false
+    /// Text selected when the command started (read through Accessibility at once).
+    private var commandSelection: String?
+    private let commands = CommandEngine()
+    public var commandModeAvailable: Bool { commands.isAvailable }
+
+    /// fn+⌃ went down. If plain dictation already started a moment earlier (fn first), the
+    /// recording simply becomes the instruction.
+    private func beginCommand() {
+        guard !isHandsFree else { return }
+        if !isRecording { beginRecording() }
+        guard isRecording else { return }
+        isCommandMode = true
+        streaming?.cancel()
+        streaming = nil
+        overlay.model.isCommand = true
+        commandSelection = SelectionReader.accessibilitySelectionNow()
+    }
+
+    private func finishCommand() {
+        guard isRecording, isCommandMode else { return }
+        let samples = recorder.stop()
+        isRecording = false
+        hotkey.isDictating = false
+        isCommandMode = false
+        let selectionAtStart = commandSelection
+        commandSelection = nil
+
+        if let started = recordingStartedAt, ContinuousClock.now - started < minimumDuration {
+            overlay.hide()
+            return
+        }
+        if AudioLevels.isSilent(samples) {
+            overlay.flash("No sound from the microphone", for: .seconds(3))
+            return
+        }
+        guard commands.isAvailable else {
+            overlay.flash("Command mode needs Apple Intelligence", for: .seconds(3))
+            return
+        }
+
+        overlay.show(.transcribing)
+        overlay.model.isCommand = true
+        isTranscribing = true
+        sounds.playStop()
+        let releasedAt = ContinuousClock.now
+        let bundleID = target?.bundleID
+        let category = target?.context.category ?? .general
+        let audioSeconds = Double(samples.count) / AudioRecorder.sampleRate
+
+        transcriptionTask = Task { [engine, commands] in
+            defer {
+                self.transcriptionTask = nil
+                self.isTranscribing = false
+            }
+            do {
+                let spoken = try await engine.transcribe(samples)
+                let instruction = FillerRemover().apply(spoken, context: TextContext())
+                guard !instruction.isEmpty else {
+                    self.overlay.flash("Didn't catch that")
+                    return
+                }
+                // Fall back to copying the selection now that the keys are up.
+                var selection = selectionAtStart
+                if selection?.isEmpty ?? true { selection = await SelectionReader.selectedText() }
+                let result = try await commands.run(instruction: instruction, selection: selection, category: category)
+                self.overlay.hide()
+                await self.inserter.insert(result)
+                let latency = Int((ContinuousClock.now - releasedAt) / .milliseconds(1))
+                self.lastTranscript = result
+                self.lastLatencyMs = latency
+                self.history.append(DictationRecord(
+                    raw: instruction, text: result, audioSeconds: audioSeconds, latencyMs: latency,
+                    bundleID: bundleID, formatted: true, command: true
+                ))
+                self.log.info("Command: \(audioSeconds, format: .fixed(precision: 1))s instruction → \(latency) ms (selection: \(selection?.isEmpty == false))")
+            } catch {
+                self.log.error("Command failed: \(error.localizedDescription)")
+                self.overlay.flash((error as? CommandEngine.Failure)?.errorDescription ?? "Command failed", for: .seconds(3))
+            }
         }
     }
 
@@ -324,6 +414,8 @@ public final class DictationController: ObservableObject {
         _ = recorder.stop()
         isRecording = false
         hotkey.isDictating = false
+        isCommandMode = false
+        commandSelection = nil
         streaming?.cancel()
         streaming = nil
         overlay.hide()
