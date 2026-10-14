@@ -1,4 +1,5 @@
 import AppKit
+@preconcurrency import CoreFoundation
 import CoreGraphics
 import os
 
