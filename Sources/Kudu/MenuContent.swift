@@ -51,6 +51,7 @@ struct MenuContent: View {
             Picker("Dictation key", selection: $controller.trigger) {
                 ForEach(TriggerKey.allCases) { key in Text(key.displayName).tag(key) }
             }
+            Toggle("Sounds", isOn: $controller.soundsEnabled)
             Toggle("Keep microphone warm", isOn: $controller.keepMicWarm)
                 .help("Removes start-up delay and keeps the first syllable. The mic indicator stays on.")
 

@@ -29,6 +29,12 @@ public final class DictationController: ObservableObject {
             UserDefaults.standard.set(trigger.rawValue, forKey: Keys.trigger)
         }
     }
+    @Published public var soundsEnabled: Bool {
+        didSet {
+            sounds.isEnabled = soundsEnabled
+            UserDefaults.standard.set(soundsEnabled, forKey: Keys.soundsEnabled)
+        }
+    }
     @Published public var keepMicWarm: Bool {
         didSet {
             recorder.keepWarm = keepMicWarm
@@ -41,6 +47,7 @@ public final class DictationController: ObservableObject {
     private let engine = ParakeetEngine()
     private let inserter = TextInserter()
     private let overlay = OverlayPanel()
+    private let sounds = SoundCues()
     public let store: UserDataStore
     private var recordingStartedAt: ContinuousClock.Instant?
     private var transcriptionTask: Task<Void, Never>?
@@ -54,6 +61,7 @@ public final class DictationController: ObservableObject {
     private enum Keys {
         static let trigger = "triggerKey"
         static let keepMicWarm = "keepMicWarm"
+        static let soundsEnabled = "soundsEnabled"
     }
 
     public init(store: UserDataStore = UserDataStore()) {
@@ -62,7 +70,9 @@ public final class DictationController: ObservableObject {
         let trigger = defaults.string(forKey: Keys.trigger).flatMap(TriggerKey.init(rawValue:)) ?? .fn
         self.trigger = trigger
         self.keepMicWarm = defaults.bool(forKey: Keys.keepMicWarm)
+        self.soundsEnabled = defaults.object(forKey: Keys.soundsEnabled) as? Bool ?? true
         self.hotkey = HotkeyMonitor(trigger: trigger)
+        sounds.isEnabled = soundsEnabled
         hotkey.onEvent = { [weak self] event in self?.handle(event) }
         let overlayModel = overlay.model
         recorder.onLevel = { level in
@@ -157,6 +167,7 @@ public final class DictationController: ObservableObject {
         hotkey.isDictating = true
         recordingStartedAt = .now
         overlay.show(.recording)
+        sounds.playStart()
     }
 
     private func cancelRecording() {
@@ -165,6 +176,7 @@ public final class DictationController: ObservableObject {
         isRecording = false
         hotkey.isDictating = false
         overlay.hide()
+        sounds.playCancel()
     }
 
     private func finishRecording() {
@@ -179,6 +191,7 @@ public final class DictationController: ObservableObject {
         }
 
         overlay.show(.transcribing)
+        sounds.playStop()
         let releasedAt = ContinuousClock.now
         let category = AppContext.frontmostCategory()
         let precedingCharacter = inserter.precedingCharacter()
