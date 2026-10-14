@@ -4,6 +4,9 @@ import PackageDescription
 let package = Package(
     name: "Kudu",
     platforms: [.macOS(.v14)],
+    products: [
+        .executable(name: "Kudu", targets: ["Kudu"]),
+    ],
     dependencies: [
         // Parakeet ASR + Silero VAD on the Neural Engine. Apache-2.0.
         // `traits: []` drops the ~8 MB NeMo text-normalization binary; Kudu does its own cleanup.
@@ -19,6 +22,12 @@ let package = Package(
                 "KuduCore",
                 .product(name: "FluidAudio", package: "FluidAudio"),
             ]
+        ),
+        // The menu-bar app itself.
+        .executableTarget(
+            name: "Kudu",
+            dependencies: ["KuduKit"],
+            exclude: ["Info.plist", "Kudu.entitlements"]
         ),
         .testTarget(name: "KuduCoreTests", dependencies: ["KuduCore"]),
     ]
