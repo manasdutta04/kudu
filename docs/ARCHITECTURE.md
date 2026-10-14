@@ -22,13 +22,12 @@ fn up   ─▶ AudioRecorder.stop ─▶ ParakeetEngine.transcribe ─▶ TextPi
 - A session-level `CGEventTap` watches modifier changes and key presses.
 - The trigger is fn, Right ⌘ or Right ⌥. Right-side modifiers are told apart by their device-specific flag bits.
 - Another key during the hold means the user is typing a shortcut, so dictation is cancelled.
-- Escape cancels and is swallowed. The fn release after a dictation is also swallowed, so the emoji picker doesn't open.
+- Escape cancels a dictation and is swallowed.
 - Two quick taps lock hands-free recording.
 - The tap runs on its own thread at the HID level (session level as a fallback).
-- **The emoji picker:** while fn is the dictation key, `FnKeyGuard` (`KuduCore`) sets "Press 🌐 key to" (`com.apple.HIToolbox AppleFnUsageType`) to *Do Nothing*.
-  - It saves the original value first and restores it on quit or on SIGTERM/SIGINT/SIGHUP.
-  - After a crash, the original is restored on the next launch.
-  - If the user changes the setting while Kudu runs, their choice is kept.
+- **The emoji picker:** while fn is the dictation key, the tap swallows both the fn press and its release, so macOS never sees a 🌐 tap.
+  - Letting only the press through leaves the system thinking fn is held, and the next fn event completes a "tap".
+  - Nothing in System Settings is changed; fn works normally as soon as Kudu quits.
 
 ### Audio (`KuduKit/Audio`)
 - `AVAudioEngine` with a tap on the input node, converted to 16 kHz mono with `AVAudioConverter`.

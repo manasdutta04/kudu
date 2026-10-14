@@ -24,9 +24,9 @@ reporting.
 | Accessibility | To notice the dictation key and to type text into other apps |
 
 ## The 🌐 / fn key
-When fn is the dictation key, Kudu temporarily sets **System Settings → Keyboard → "Press 🌐 key
-to"** to *Do Nothing*, so tapping fn doesn't open the emoji picker. Your own choice is saved
-and put back when Kudu quits. You can turn this off in Kudu's menu.
+When fn is the dictation key, Kudu keeps fn presses to itself while it runs, so tapping fn
+doesn't open the emoji picker. No system setting is changed: quit Kudu and fn works as usual.
+You can turn this off in Kudu's menu.
 
 ## Optional "Keep microphone warm"
 When enabled, the microphone stays open between dictations so recording starts instantly.
