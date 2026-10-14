@@ -4,6 +4,8 @@
 //   swift run -c release kudu-bench clip1.wav clip2.wav
 //   swift run -c release kudu-bench --format clip1.wav          (also run smart formatting)
 //   swift run -c release kudu-bench --format --text "raw words"  (format text, no audio)
+//   swift run -c release kudu-bench --stream clip.wav             (replay in real time, as if spoken;
+//                                                                  measures release → text like the app)
 import AVFoundation
 import Foundation
 import os
@@ -31,9 +33,10 @@ func loadSamples(_ url: URL) throws -> [Float] {
 }
 
 var arguments = Array(CommandLine.arguments.dropFirst())
-let formatting = arguments.contains("--format")
+let streamMode = arguments.contains("--stream")
+let formatting = arguments.contains("--format") || streamMode
 let textMode = arguments.contains("--text")
-arguments.removeAll { $0 == "--format" || $0 == "--text" }
+arguments.removeAll { $0 == "--format" || $0 == "--text" || $0 == "--stream" }
 guard !arguments.isEmpty else {
     print("usage: kudu-bench [--format] <file.wav>...  |  kudu-bench --format --text \"raw words\"...")
     exit(1)
@@ -50,9 +53,9 @@ if formatting {
 func clean(_ raw: String) async -> (text: String, formatMs: Double?) {
     var text = TextPipeline.beforeFormatting(settings: settings).process(raw)
     var formatMs: Double?
-    if formatting, settings.smartFormatting.applies(toWordCount: WordCount.count(text)) {
+    if formatting, FormattingNeed.shouldFormat(text, strength: settings.editingStrength) {
         let start = ContinuousClock.now
-        if let formatted = await formatter.format(text, category: .general, terms: []) { text = formatted }
+        if let formatted = await formatter.format(FormatRequest(text: text)) { text = formatted }
         formatMs = (ContinuousClock.now - start) / .milliseconds(1)
     }
     return (TextPipeline.afterFormatting(settings: settings).process(text), formatMs)
@@ -88,6 +91,46 @@ let engine = ParakeetEngine()
 let loadStart = ContinuousClock.now
 try await engine.load()
 print("Model loaded + warmed in \(ContinuousClock.now - loadStart)")
+
+/// Plays samples back at real-time speed, as a microphone would deliver them.
+final class RealTimeSource: SampleSource, @unchecked Sendable {
+    let samples: [Float]
+    let start = ContinuousClock.now
+    init(_ samples: [Float]) { self.samples = samples }
+
+    func samples(from index: Int) -> [Float] {
+        let elapsed = (ContinuousClock.now - start) / .seconds(1)
+        let available = min(samples.count, Int(elapsed * 16_000))
+        return index < available ? Array(samples[index..<available]) : []
+    }
+}
+
+if streamMode {
+    for path in arguments {
+        let samples = try loadSamples(URL(fileURLWithPath: path))
+        let seconds = Double(samples.count) / 16_000
+        print(String(format: "%@  %.1fs — replaying in real time…", path, seconds))
+        let source = RealTimeSource(samples)
+        let session = await StreamingSession(
+            recorder: source, engine: engine, formatter: formatter,
+            settings: StreamingSession.Settings(
+                before: TextPipeline.beforeFormatting(settings: settings),
+                request: FormatRequest(text: ""),
+                formattingAvailable: await formatter.isAvailable
+            )
+        )
+        await session.start()
+        try await Task.sleep(for: .seconds(seconds))
+        let release = ContinuousClock.now
+        let result = try await session.finish(samples: samples)
+        let text = TextPipeline.afterFormatting(settings: settings).process(result.text)
+        let ms = (ContinuousClock.now - release) / .milliseconds(1)
+        for line in await session.trace { print("    " + line) }
+        print(String(format: "  release → text: %.0f ms   (formatted: %@)", ms, result.formatted ? "yes" : "no"))
+        print("  out → \(text)")
+    }
+    exit(0)
+}
 
 for path in arguments {
     let samples = try loadSamples(URL(fileURLWithPath: path))
