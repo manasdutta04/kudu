@@ -1,0 +1,123 @@
+name: Release
+
+# Push a tag like v0.8.0 to build Kudu for macOS, Windows and Linux and publish a GitHub
+# release with the packages and the install scripts.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v0.8.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    name: macOS package
+    runs-on: macos-26
+    defaults:
+      run:
+        working-directory: macos
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Kudu.app
+        run: scripts/build-app.sh
+      - name: Package
+        run: |
+          ditto -c -k --sequesterRsrc --keepParent build/Kudu.app ../Kudu-macOS.zip
+          mkdir -p dmg && cp -R build/Kudu.app dmg/ && ln -s /Applications dmg/Applications
+          hdiutil create -volname Kudu -srcfolder dmg -ov -format UDZO ../Kudu-macOS.dmg
+          cp packaging/install.sh ../install-macos.sh
+          ls -la ../Kudu-macOS.*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: |
+            Kudu-macOS.zip
+            Kudu-macOS.dmg
+            install-macos.sh
+
+  windows:
+    name: Windows package
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        run: rustup update stable && rustup default stable
+      - name: Build
+        run: cargo build --release -p kudu-app
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path pkg | Out-Null
+          Copy-Item target/release/kudu.exe pkg/
+          Copy-Item ../LICENSE pkg/LICENSE.txt
+          Compress-Archive -Path pkg/* -DestinationPath ../Kudu-Windows-x64.zip -Force
+          Copy-Item packaging/windows/install.ps1 ../install.ps1
+          Get-Item ../Kudu-Windows-x64.zip | Format-List Name, Length
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            Kudu-Windows-x64.zip
+            install.ps1
+
+  linux:
+    name: Linux package
+    # The oldest supported runner, so the binary runs on older glibc versions too.
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - name: Packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends pkg-config cmake libasound2-dev libssl-dev \
+            libxkbcommon-dev libwayland-dev libx11-dev libdbus-1-dev libudev-dev
+      - name: Toolchain
+        run: rustup update stable && rustup default stable
+      - name: Build
+        run: cargo build --release -p kudu-app
+      - name: Package
+        run: |
+          mkdir -p pkg/kudu
+          cp target/release/kudu pkg/kudu/
+          cp crates/kudu-app/assets/app-icon.png pkg/kudu/kudu.png
+          cp packaging/linux/kudu.desktop packaging/linux/70-kudu-uinput.rules pkg/kudu/
+          cp ../LICENSE pkg/kudu/
+          tar -C pkg -czf ../Kudu-Linux-x86_64.tar.gz kudu
+          cp packaging/linux/install.sh ../install.sh
+          ls -la ../Kudu-Linux-x86_64.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: |
+            Kudu-Linux-x86_64.tar.gz
+            install.sh
+
+  release:
+    name: Publish release
+    needs: [macos, windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        run: cd dist && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          gh release create "$TAG" dist/* --title "Kudu $TAG" --notes-file .github/release-notes.md --latest
