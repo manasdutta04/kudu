@@ -2,13 +2,14 @@ import KuduKit
 import SwiftUI
 
 enum Page: String, CaseIterable, Identifiable {
-    case home, dictionary, snippets, style, settings
+    case home, insights, dictionary, snippets, style, settings
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .home: "Home"
+        case .insights: "Insights"
         case .dictionary: "Dictionary"
         case .snippets: "Snippets"
         case .style: "Style"
@@ -19,6 +20,7 @@ enum Page: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .home: "house"
+        case .insights: "chart.bar.xaxis"
         case .dictionary: "character.book.closed"
         case .snippets: "text.badge.plus"
         case .style: "wand.and.stars"
@@ -65,6 +67,7 @@ struct MainWindow: View {
     @ViewBuilder private var detail: some View {
         switch navigation.page {
         case .home: HomeView(controller: controller, history: controller.history)
+        case .insights: InsightsPage(ledger: controller.ledger)
         case .dictionary: DictionaryPage(store: controller.store)
         case .snippets: SnippetsPage(store: controller.store)
         case .style: StylePage(controller: controller, store: controller.store)
