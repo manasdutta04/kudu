@@ -1,0 +1,14 @@
+# Windows: link the C runtime statically. The speech library ships /MT (static runtime)
+# binaries, so everything else must match; it also means Kudu runs without the Visual C++
+# Redistributable installed.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.aarch64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[env]
+# llama.cpp (smart formatting) follows the same static runtime, built as Release even in
+# debug builds so its runtime matches the speech library's.
+LLAMA_STATIC_CRT = "1"
+LLAMA_LIB_PROFILE = "Release"

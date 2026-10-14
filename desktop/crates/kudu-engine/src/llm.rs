@@ -76,8 +76,8 @@ impl SmallModel {
         let mut sampler = LlamaSampler::greedy();
         let mut decoder = encoding_rs::UTF_8.new_decoder();
         let mut output = String::new();
-        let mut position = batch.n_tokens();
-        for _ in 0..max_tokens {
+        let first_position = batch.n_tokens();
+        for position in (first_position..).take(max_tokens) {
             if start.elapsed() > timeout {
                 return Err(anyhow!("timed out after {} ms", start.elapsed().as_millis()));
             }
@@ -95,7 +95,6 @@ impl SmallModel {
             }
             batch.clear();
             batch.add(token, position, &[0], true)?;
-            position += 1;
             ctx.decode(&mut batch).map_err(|e| anyhow!("decode: {e}"))?;
         }
         let output = output.replace("<|im_end|>", "");
