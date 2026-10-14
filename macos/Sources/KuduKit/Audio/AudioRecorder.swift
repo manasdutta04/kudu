@@ -6,9 +6,10 @@ import os
 /// Latency notes:
 /// - The engine is built and `prepare()`d ahead of time, so `start()` only has to start the
 ///   audio unit.
-/// - With `keepWarm`, the engine keeps running between dictations and the last
-///   `preRollSeconds` of audio are kept, so the first syllable is never clipped. This keeps
-///   the macOS microphone indicator on, so it's opt-in.
+/// - After each dictation the engine stays running for `warmWindow` (60 s), keeping the last
+///   `preRollSeconds` of audio, so a follow-up dictation never clips its first syllable.
+/// - With `keepWarm` it stays running all the time. Both keep the macOS microphone indicator
+///   on while warm; the audio is only ever held in memory.
 public final class AudioRecorder: @unchecked Sendable {
     public static let sampleRate: Double = 16_000
 
@@ -23,6 +24,8 @@ public final class AudioRecorder: @unchecked Sendable {
         }
     }
     public var preRollSeconds: Double = 0.3
+    /// How long the microphone stays warm after a dictation. 0 turns it off.
+    public var warmWindow: TimeInterval = 60
 
     private let engine = AVAudioEngine()
     private let targetFormat = AVAudioFormat(
@@ -36,7 +39,12 @@ public final class AudioRecorder: @unchecked Sendable {
         var samples: [Float] = []
         var preRoll: [Float] = []
         var keepWarm = false
+        /// Inside the warm window after a dictation: keep collecting pre-roll.
+        var warmAfterUse = false
+        var startRequestedAt: ContinuousClock.Instant?
     }
+    /// Invalidates earlier cool-down timers when a new dictation starts.
+    private var warmGeneration = 0
     private let state = OSAllocatedUnfairLock(initialState: State())
     private let log = Logger(subsystem: "app.kudu", category: "audio")
     private var configObserver: NSObjectProtocol?
@@ -60,10 +68,14 @@ public final class AudioRecorder: @unchecked Sendable {
     }
 
     public func start() throws {
+        warmGeneration += 1
+        let wasRunning = engine.isRunning
         state.withLock { state in
             state.isRecording = true
             state.samples = state.preRoll
             state.samples.reserveCapacity(Int(Self.sampleRate) * 30)
+            // Measure how long a cold microphone takes to deliver audio (Bluetooth is slow).
+            state.startRequestedAt = wasRunning ? nil : .now
         }
         installTapIfNeeded()
         if !engine.isRunning {
@@ -75,10 +87,11 @@ public final class AudioRecorder: @unchecked Sendable {
     public func stop() -> [Float] {
         let samples = state.withLock { state -> [Float] in
             state.isRecording = false
+            state.warmAfterUse = warmWindow > 0
             defer { state.samples = [] }
             return state.samples
         }
-        coolDownIfIdle()
+        scheduleCoolDown()
         return samples
     }
 
@@ -93,8 +106,23 @@ public final class AudioRecorder: @unchecked Sendable {
 
     private func coolDownIfIdle() {
         guard !keepWarm, !isRecording, engine.isRunning else { return }
+        guard !state.withLock({ $0.warmAfterUse }) else { return }
         engine.pause()
         state.withLock { $0.preRoll = [] }
+    }
+
+    /// Ends the warm window `warmWindow` seconds after the last dictation.
+    private func scheduleCoolDown() {
+        guard warmWindow > 0 else {
+            coolDownIfIdle()
+            return
+        }
+        let generation = warmGeneration
+        DispatchQueue.main.asyncAfter(deadline: .now() + warmWindow) { [weak self] in
+            guard let self, self.warmGeneration == generation else { return }
+            self.state.withLock { $0.warmAfterUse = false }
+            self.coolDownIfIdle()
+        }
     }
 
     private func installTapIfNeeded() {
@@ -125,15 +153,23 @@ public final class AudioRecorder: @unchecked Sendable {
 
         let preRollLimit = Int(preRollSeconds * Self.sampleRate)
         let samples = Array(chunk)
-        state.withLock { state in
+        let startupDelay = state.withLock { state -> Duration? in
             if state.isRecording {
                 state.samples.append(contentsOf: samples)
-            } else if state.keepWarm {
+                if let requested = state.startRequestedAt {
+                    state.startRequestedAt = nil
+                    return ContinuousClock.now - requested
+                }
+            } else if state.keepWarm || state.warmAfterUse {
                 state.preRoll.append(contentsOf: samples)
                 if state.preRoll.count > preRollLimit {
                     state.preRoll.removeFirst(state.preRoll.count - preRollLimit)
                 }
             }
+            return nil
+        }
+        if let startupDelay {
+            log.info("Microphone delivered first audio after \(Int(startupDelay / .milliseconds(1))) ms")
         }
     }
 

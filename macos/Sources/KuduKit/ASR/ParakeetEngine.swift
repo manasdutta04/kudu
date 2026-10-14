@@ -45,10 +45,15 @@ public actor ParakeetEngine: TranscriptionEngine {
         manager = nil
     }
 
+    /// 200 ms of silence around each clip. Transducer models tend to drop or garble the first
+    /// and last word when speech starts or stops right at the edge of the audio.
+    private static let padding = [Float](repeating: 0, count: 3_200)
+
     public func transcribe(_ samples: [Float]) async throws -> String {
         guard let manager else { throw TranscriptionError.notReady }
         var state = TdtDecoderState.make(decoderLayers: Self.version.decoderLayers)
-        let result = try await manager.transcribe(samples, decoderState: &state)
+        let padded = Self.padding + samples + Self.padding
+        let result = try await manager.transcribe(padded, decoderState: &state)
         return result.text
     }
 }
