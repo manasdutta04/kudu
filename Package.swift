@@ -7,5 +7,6 @@ let package = Package(
     targets: [
         // Pure, dependency-free logic (text cleanup, settings models). Fully unit-tested.
         .target(name: "KuduCore"),
+        .testTarget(name: "KuduCoreTests", dependencies: ["KuduCore"]),
     ]
 )
