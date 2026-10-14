@@ -7,6 +7,9 @@ public enum CommandOutput {
     private static let preamble = try! NSRegularExpression(
         pattern: "^(sure|certainly|of course|absolutely|okay|ok|here(’|')?s|here is|here are|below is)\\b[^\\n]*?:\\s*\\n?",
         options: [.caseInsensitive])
+    /// "Dear, may I…": a salutation with no name, which the model sometimes adds when it
+    /// formalizes "hey".
+    private static let namelessSalutation = try! NSRegularExpression(pattern: "^(?i:dear),\\s+(?=\\p{Ll})")
     private static let afterword = try! NSRegularExpression(
         pattern: "\\n+\\s*(let me know|i hope this|feel free to|is there anything)[^\\n]*$", options: [.caseInsensitive])
 
@@ -16,6 +19,11 @@ public enum CommandOutput {
         text = preamble.stringByReplacingMatches(in: text, range: range, withTemplate: "")
         range = NSRange(text.startIndex..., in: text)
         text = afterword.stringByReplacingMatches(in: text, range: range, withTemplate: "")
+        range = NSRange(text.startIndex..., in: text)
+        if namelessSalutation.firstMatch(in: text, range: range) != nil {
+            text = namelessSalutation.stringByReplacingMatches(in: text, range: range, withTemplate: "")
+            text = text.prefix(1).uppercased() + text.dropFirst()
+        }
         text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         for (open, close) in [("```", "```"), ("\"", "\""), ("“", "”")]
         where text.hasPrefix(open) && text.hasSuffix(close) && text.count > open.count + close.count {
