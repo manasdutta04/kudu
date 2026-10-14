@@ -85,7 +85,9 @@ final class EditObserver {
     }
 
     private func learn(inserted: String, edited: String, known: Set<String>) -> Bool {
-        let learned = CorrectionLearner.learn(inserted: inserted, edited: edited, known: known)
+        let learned = CorrectionLearner.learn(inserted: inserted, edited: edited, known: known) { word in
+            NSSpellChecker.shared.checkSpelling(of: word, startingAt: 0).location == NSNotFound
+        }
         log.info("Observed an edit; learned \(learned.count) correction(s)")
         guard !learned.isEmpty else { return false }
         onLearned?(learned)

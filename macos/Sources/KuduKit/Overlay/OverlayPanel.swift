@@ -225,6 +225,14 @@ enum ScreenPlacement {
 struct OverlayView: View {
     @ObservedObject var model: OverlayModel
 
+    static let violet = Color(red: 0.72, green: 0.62, blue: 1)
+
+    /// The learned words, kept short enough for the pill.
+    static func short(_ words: [String]) -> String {
+        let text = words.joined(separator: ", ")
+        return text.count > 24 ? String(text.prefix(22)) + "…" : text
+    }
+
     var body: some View {
         content
             .padding(.horizontal, 12)
@@ -265,25 +273,26 @@ struct OverlayView: View {
                 .foregroundStyle(.white.opacity(0.92))
                 .lineLimit(1)
         case .learned(let words):
+            // Compact and hugging its content: "✦ heatmap saved to dictionary | Undo".
             HStack(spacing: 6) {
                 Image(systemName: "sparkle")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(Color(red: 0.72, green: 0.62, blue: 1))
-                Text("Added to dictionary")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.7))
-                Text(words.joined(separator: ", "))
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .font(.system(size: 9.5, weight: .bold))
+                    .foregroundStyle(Self.violet)
+                (Text(Self.short(words)).foregroundStyle(.white).fontWeight(.semibold)
+                    + Text(" saved to dictionary").foregroundStyle(.white.opacity(0.62)))
+                    .font(.system(size: 11))
                     .lineLimit(1)
-                    .truncationMode(.tail)
-                    .frame(maxWidth: 150)
+                    .fixedSize()
+                Rectangle()
+                    .fill(.white.opacity(0.18))
+                    .frame(width: 0.5, height: 11)
                 Button("Undo") { model.undoLearned?() }
                     .buttonStyle(.plain)
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Color(red: 0.72, green: 0.62, blue: 1))
-                    .padding(.leading, 2)
+                    .foregroundStyle(Self.violet)
+                    .fixedSize()
             }
+            .fixedSize()
         }
     }
 }

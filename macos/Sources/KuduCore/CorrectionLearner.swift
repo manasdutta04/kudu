@@ -19,7 +19,13 @@ public enum CorrectionLearner {
     static let maximumCandidates = 3
     static let maximumPhraseWords = 3
 
-    public static func learn(inserted: String, edited: String, known: Set<String> = []) -> [LearnedCorrection] {
+    /// - Parameter isKnownWord: whether a word is ordinary vocabulary (the system spell checker).
+    ///   Swapping one ordinary word for another ("hit" → "heat") is only safe with its
+    ///   neighbour, so it's learned as a phrase ("hit map" → "heat map"); learning the bare
+    ///   word would change every "hit" from then on.
+    public static func learn(
+        inserted: String, edited: String, known: Set<String> = [], isKnownWord: (String) -> Bool = { _ in false }
+    ) -> [LearnedCorrection] {
         let before = tokens(inserted)
         let after = tokens(edited)
         guard !before.isEmpty, !after.isEmpty, before != after else { return [] }
@@ -44,10 +50,25 @@ public enum CorrectionLearner {
             let to = run.compactMap(\.after)
             let atSentenceStart = index == 0
                 || operations[index - 1].before.map { ".?!:".contains($0.last ?? " ") } ?? false
-            if let correction = candidate(from: from, to: to, atSentenceStart: atSentenceStart),
-               !knownLowercased.contains(correction.written.lowercased()),
-               !results.contains(where: { $0.written == correction.written }) {
-                results.append(correction)
+            if var correction = candidate(from: from, to: to, atSentenceStart: atSentenceStart) {
+                let ordinarySwap = from.count == 1 && to.count == 1
+                    && correction.heard != correction.written.lowercased()
+                    && isKnownWord(from[0]) && isKnownWord(to[0])
+                if ordinarySwap {
+                    // Anchor it to the unchanged word after it (or before it, at the end).
+                    if end < operations.count, let next = operations[end].after {
+                        correction = LearnedCorrection(heard: correction.heard + " " + next.lowercased(), written: correction.written + " " + next)
+                    } else if index > 0, let previous = operations[index - 1].after {
+                        correction = LearnedCorrection(heard: previous.lowercased() + " " + correction.heard, written: previous + " " + correction.written)
+                    } else {
+                        index = end
+                        continue
+                    }
+                }
+                if !knownLowercased.contains(correction.written.lowercased()),
+                   !results.contains(where: { $0.written == correction.written }) {
+                    results.append(correction)
+                }
             }
             index = end
         }

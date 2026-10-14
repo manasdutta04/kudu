@@ -101,6 +101,14 @@ import Testing
         #expect(learned == [LearnedCorrection(heard: "hitmap", written: "heatmap")])
     }
 
+    @Test func learnsASwapOfOrdinaryWordsOnlyAsAPhrase() {
+        let vocabulary: Set<String> = ["the", "hit", "heat", "map", "is", "ready"]
+        let learned = CorrectionLearner.learn(inserted: "The hit map is ready", edited: "The heat map is ready") {
+            vocabulary.contains($0.lowercased())
+        }
+        #expect(learned == [LearnedCorrection(heard: "hit map", written: "heat map")])
+    }
+
     @Test func learnsAMisheardName() {
         let learned = CorrectionLearner.learn(inserted: "Can you tag Pia on this?", edited: "Can you tag Priya on this?")
         #expect(learned == [LearnedCorrection(heard: "pia", written: "Priya")])
