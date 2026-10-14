@@ -43,7 +43,7 @@ public final class UsageLedger: ObservableObject {
 
     public func recordLearned(_ count: Int) {
         let day = calendar.startOfDay(for: .now)
-        days[day, default: DayTotal()].learned += count
+        days[day, default: DayTotal()].learned = max(0, days[day, default: DayTotal()].learned + count)
         save()
     }
 

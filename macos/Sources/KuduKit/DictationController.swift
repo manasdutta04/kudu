@@ -152,6 +152,7 @@ public final class DictationController: ObservableObject {
 
     /// Call once at launch, and again after permissions change.
     public func activate() {
+        AppAccessibility.start()
         if Permissions.microphoneGranted {
             if microphoneUID != nil {
                 recorder.setInputDevice(uid: microphoneUID)
@@ -245,6 +246,7 @@ public final class DictationController: ObservableObject {
     /// Saves learned spellings to the dictionary: a new entry, or one more way of hearing an
     /// existing spelling.
     private func remember(_ corrections: [LearnedCorrection]) {
+        let before = store.dictionary
         for correction in corrections {
             if let index = store.dictionary.firstIndex(where: { $0.written == correction.written }) {
                 if !store.dictionary[index].heard.contains(where: { $0.lowercased() == correction.heard }) {
@@ -254,10 +256,16 @@ public final class DictationController: ObservableObject {
                 store.dictionary.append(DictionaryEntry(heard: [correction.heard], written: correction.written, learned: true))
             }
         }
+        let after = store.dictionary
         ledger.recordLearned(corrections.count)
-        let names = corrections.map { "“\($0.written)”" }.joined(separator: ", ")
         log.info("Learned \(corrections.count) spelling(s)")
-        overlay.flash("✦ Learned \(names)", for: .seconds(2.5))
+        // The pill is busy while you dictate; the words are saved either way.
+        guard !isRecording, !isTranscribing else { return }
+        overlay.notifyLearned(corrections.map(\.written)) { [weak self] in
+            guard let self, self.store.dictionary == after else { return }
+            self.store.dictionary = before
+            self.ledger.recordLearned(-corrections.count)
+        }
     }
 
     /// Types the most recent result at the cursor again (⌃⌘V, or the menu).
@@ -371,6 +379,11 @@ public final class DictationController: ObservableObject {
                 // Fall back to copying the selection now that the keys are up.
                 var selection = selectionAtStart
                 if selection?.isEmpty ?? true { selection = await SelectionReader.selectedText() }
+                // "Fix this" with nothing selected: there's nothing to fix, so don't invent text.
+                if selection?.isEmpty ?? true, CommandOutput.needsSelection(instruction) {
+                    self.overlay.flash("Select the text first, then hold fn + ⌃", for: .seconds(3))
+                    return
+                }
                 let result = try await commands.run(instruction: instruction, selection: selection, category: category)
                 self.overlay.hide()
                 await self.inserter.insert(result)
@@ -547,7 +560,8 @@ public final class DictationController: ObservableObject {
             let interval = signposter.beginInterval("dictation")
             do {
                 let result = try await session.finish(samples: samples)
-                var text = ScreenSpeller(terms: self.screenTerms).apply(result.text)
+                let spelled = Speller.make(dictionary: Array(knownSpellings), screen: self.screenTerms).apply(result.text)
+                var text = spelled.text
                 var formatted = result.formatted
                 if let expansion = snippets.match(result.raw) {
                     text = expansion
@@ -567,7 +581,7 @@ public final class DictationController: ObservableObject {
                     let record = DictationRecord(
                         raw: result.raw, text: text, audioSeconds: audioSeconds, latencyMs: latency,
                         bundleID: target.bundleID, formatted: formatted,
-                        dictionaryFixes: dictionary.corrections(in: result.raw)
+                        dictionaryFixes: dictionary.corrections(in: result.raw) + spelled.fixes
                     )
                     self.history.append(record)
                     self.ledger.record(record)

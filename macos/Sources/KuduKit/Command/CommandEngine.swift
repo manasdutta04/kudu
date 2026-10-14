@@ -40,9 +40,9 @@ public final class CommandEngine {
         let session = LanguageModelSession(instructions: Self.instructions)
         let prompt: String
         if let selection, !selection.isEmpty {
-            prompt = "Instruction: \(instruction)\n\nApply it to this text and return only the result:\n\(selection)"
+            prompt = "Instruction: \(instruction)\n\nText:\n\(selection)"
         } else {
-            prompt = "Instruction: \(instruction)\n\(Self.destination(category))\nWrite the text now and return only the text."
+            prompt = ["Request: \(instruction)", Self.destination(category)].filter { !$0.isEmpty }.joined(separator: "\n")
         }
         let output: String? = try await withThrowingTaskGroup(of: String?.self) { group in
             group.addTask { try await session.respond(to: prompt).content }
@@ -55,7 +55,7 @@ public final class CommandEngine {
             return first
         }
         guard let output else { throw Failure.timedOut }
-        let text = CommandOutput.clean(output)
+        let text = CommandOutput.clean(output, instruction: instruction)
         guard !text.isEmpty else { throw Failure.empty }
         log.info("Command done in \(Int((ContinuousClock.now - start) / .milliseconds(1))) ms (selection: \(selection?.isEmpty == false))")
         return text
@@ -68,7 +68,7 @@ public final class CommandEngine {
         You are a writing tool inside the user's text field. The user speaks an instruction.
         If text is given, apply the instruction to it (rewrite, change tone, translate, shorten, fix, reformat) \
         and return only the resulting text. Keep the meaning unless asked to change it.
-        If no text is given, write the requested text in the user's voice, ready to send.
+        If only a request is given, write the requested text in the user's voice, ready to send.
         Don't add a greeting, salutation or sign-off unless asked.
         Never explain, never add a preamble or quotes, never ask questions. Output only the text.
         """

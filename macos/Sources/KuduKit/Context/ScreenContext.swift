@@ -51,35 +51,14 @@ enum ScreenContext {
     }
 }
 
-/// Fixes words the speech model misheard when they sound like a name or term on screen:
-/// "Sidarth" → "Siddharth", "github" → "GitHub". Only words the macOS spell checker doesn't
-/// know are changed, so a real word never turns into a name by accident; the exception is the
-/// same word with a name's inner capitals ("github" → "GitHub").
+/// `TermSpeller` with the macOS spell checker deciding which words are ordinary vocabulary.
 @MainActor
-struct ScreenSpeller {
-    let terms: [String]
-
-    func apply(_ text: String) -> String {
-        guard !terms.isEmpty else { return text }
-        let checker = NSSpellChecker.shared
-        var result = text
-        let pattern = try! NSRegularExpression(pattern: "[\\p{L}][\\p{L}'’]{2,}")
-        for match in pattern.matches(in: text, range: NSRange(text.startIndex..., in: text)).reversed() {
-            guard let range = Range(match.range, in: result) else { continue }
-            let word = String(result[range])
-            if let exact = terms.first(where: { $0.lowercased() == word.lowercased() && $0 != word && $0.dropFirst().contains(where: \.isUppercase) }) {
-                result.replaceSubrange(range, with: exact)
-                continue
+enum Speller {
+    static func make(dictionary: [String], screen: [String]) -> TermSpeller {
+        TermSpeller(dictionary: dictionary, screen: screen) { word in
+            MainActor.assumeIsolated {
+                NSSpellChecker.shared.checkSpelling(of: word, startingAt: 0).location == NSNotFound
             }
-            let misspelled = checker.checkSpelling(of: word, startingAt: 0).location != NSNotFound
-            guard misspelled,
-                  let term = terms.first(where: {
-                      !$0.contains(".") && !$0.contains("_") && abs($0.count - word.count) <= 3
-                          && CorrectionLearner.soundsAlike(word, $0)
-                  })
-            else { continue }
-            result.replaceSubrange(range, with: term)
         }
-        return result
     }
 }

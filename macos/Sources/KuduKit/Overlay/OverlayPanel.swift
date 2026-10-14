@@ -9,6 +9,8 @@ public final class OverlayModel: ObservableObject {
         case recording
         case transcribing
         case message(String)
+        /// Words just saved to the dictionary, with an Undo button.
+        case learned([String])
 
         var isMessage: Bool {
             if case .message = self { return true }
@@ -23,6 +25,8 @@ public final class OverlayModel: ObservableObject {
     @Published public var isCommand = false
     /// Smoothed loudness history (0...1), newest first. The middle bar shows the newest value
     /// and older values ripple outward, so the wave follows the voice.
+    /// Undoes the last "added to dictionary" notice.
+    var undoLearned: (() -> Void)?
     @Published public private(set) var history: [Float] = Array(repeating: 0, count: OverlayModel.historyLength)
 
     static let historyLength = 5
@@ -56,7 +60,7 @@ public final class OverlayPanel {
     public let model = OverlayModel()
     private let panel: NSPanel
     /// The panel is a fixed transparent canvas; the pill inside sizes itself to its content.
-    private let canvas = NSSize(width: 260, height: 44)
+    private let canvas = NSSize(width: 380, height: 44)
 
     public init() {
         panel = NSPanel(
@@ -74,7 +78,7 @@ public final class OverlayPanel {
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
         panel.animationBehavior = .none
-        let host = NSHostingView(rootView: OverlayView(model: model))
+        let host = ClickThroughHostingView(rootView: OverlayView(model: model))
         host.frame = NSRect(origin: .zero, size: canvas)
         panel.contentView = host
         observeLayoutChanges()
@@ -118,6 +122,7 @@ public final class OverlayPanel {
     }
 
     public func show(_ phase: OverlayModel.Phase) {
+        if case .learned = phase {} else { panel.ignoresMouseEvents = true }
         model.phase = phase
         if phase == .recording {
             model.resetLevels()
@@ -134,6 +139,24 @@ public final class OverlayPanel {
         tracker?.cancel()
         tracker = nil
         panel.orderOut(nil)
+        panel.ignoresMouseEvents = true
+        model.undoLearned = nil
+    }
+
+    /// "✦ Added to dictionary · heatmap  Undo": shown after Kudu learns from a correction.
+    /// The pill takes clicks only while this notice is up, for the Undo button.
+    public func notifyLearned(_ words: [String], for duration: Duration = .seconds(5), undo: @escaping () -> Void) {
+        let phase = OverlayModel.Phase.learned(words)
+        show(phase)
+        model.undoLearned = { [weak self] in
+            undo()
+            self?.flash("Removed from dictionary", for: .seconds(1.5))
+        }
+        panel.ignoresMouseEvents = false
+        Task { @MainActor in
+            try? await Task.sleep(for: duration)
+            if model.phase == phase { hide() }
+        }
     }
 
     /// Shows a short message, then hides.
@@ -241,8 +264,33 @@ struct OverlayView: View {
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.white.opacity(0.92))
                 .lineLimit(1)
+        case .learned(let words):
+            HStack(spacing: 6) {
+                Image(systemName: "sparkle")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(Color(red: 0.72, green: 0.62, blue: 1))
+                Text("Added to dictionary")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.7))
+                Text(words.joined(separator: ", "))
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: 150)
+                Button("Undo") { model.undoLearned?() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Color(red: 0.72, green: 0.62, blue: 1))
+                    .padding(.leading, 2)
+            }
         }
     }
+}
+
+/// The pill is in a panel that never becomes key, so let the first click reach the Undo button.
+private final class ClickThroughHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
 /// Nine thin bars, mirrored around the middle. The middle bar shows the newest loudness and

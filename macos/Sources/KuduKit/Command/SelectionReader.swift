@@ -47,7 +47,7 @@ enum SelectionReader {
         }
 
         var copied: String?
-        for _ in 0..<8 { // up to ~200 ms for the app to answer
+        for _ in 0..<16 { // up to ~400 ms for the app (web views are slower) to answer
             try? await Task.sleep(for: .milliseconds(25))
             if pasteboard.changeCount != before {
                 copied = pasteboard.string(forType: .string)
