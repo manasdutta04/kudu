@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import os
 
 /// Observable state the overlay pill renders.
 @MainActor
@@ -78,8 +79,7 @@ public final class OverlayPanel {
     }
 
     /// Switching apps or Spaces can show or hide the Dock (full-screen apps hide it), so move
-    /// the pill while it's visible. Checked again shortly after, because the frontmost app and
-    /// its full-screen state settle a moment after the switch.
+    /// the pill right away when that happens; the tracker below catches anything these miss.
     private func observeLayoutChanges() {
         let center = NSWorkspace.shared.notificationCenter
         for name in [NSWorkspace.didActivateApplicationNotification, NSWorkspace.activeSpaceDidChangeNotification] {
@@ -97,9 +97,18 @@ public final class OverlayPanel {
     private func layoutDidChange() {
         guard panel.isVisible else { return }
         position(animated: true)
-        Task { @MainActor [weak self] in
-            for delay in [250, 700] {
-                try? await Task.sleep(for: .milliseconds(delay))
+    }
+
+    /// While visible, re-check placement a few times a second. App and Space switches don't
+    /// always send a notification at the moment the Dock appears or disappears, and a
+    /// full-screen app's Dock can slide in at any time.
+    private var tracker: Task<Void, Never>?
+
+    private func startTracking() {
+        tracker?.cancel()
+        tracker = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(250))
                 guard let self, self.panel.isVisible else { return }
                 self.position(animated: true)
             }
@@ -115,9 +124,12 @@ public final class OverlayPanel {
         guard !panel.isVisible else { return }
         position(animated: false)
         panel.orderFrontRegardless()
+        startTracking()
     }
 
     public func hide() {
+        tracker?.cancel()
+        tracker = nil
         panel.orderOut(nil)
     }
 
@@ -136,25 +148,26 @@ public final class OverlayPanel {
         let mouse = NSEvent.mouseLocation
         guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }) ?? NSScreen.main
         else { return }
-        let dockShowing = !ScreenPlacement.dockAutoHides && !ScreenPlacement.frontWindowIsFullScreen()
+        let fullScreen = ScreenPlacement.frontWindowIsFullScreen()
+        let dockShowing = !ScreenPlacement.dockAutoHides && !fullScreen
         // visibleFrame always reserves the Dock's space, even when a full-screen app hides it.
         let floor = dockShowing ? screen.visibleFrame.minY : screen.frame.minY
         let gap: CGFloat = dockShowing ? 6 : 10
         // The pill is vertically centered in the transparent canvas.
         let pillHeight: CGFloat = 26
-        let y = floor + gap - (canvas.height - pillHeight) / 2
-        let origin = NSPoint(x: screen.frame.midX - canvas.width / 2, y: y)
+        let origin = NSPoint(
+            x: (screen.frame.midX - canvas.width / 2).rounded(),
+            y: (floor + gap - (canvas.height - pillHeight) / 2).rounded()
+        )
         guard panel.frame.origin != origin else { return }
-        if animated {
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.22
-                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                panel.animator().setFrameOrigin(origin)
-            }
-        } else {
-            panel.setFrameOrigin(origin)
-        }
+        log.info("Overlay placement: dockShowing=\(dockShowing) fullScreen=\(fullScreen) y=\(origin.y)")
+        let frame = NSRect(origin: origin, size: canvas)
+        // setFrame(_:display:animate:) moves the window itself; the animator proxy on an
+        // origin change is not reliably applied to panels.
+        panel.setFrame(frame, display: true, animate: animated)
     }
+
+    private let log = Logger(subsystem: "app.kudu", category: "overlay")
 }
 
 /// Facts about the screen layout that NSScreen doesn't expose.
