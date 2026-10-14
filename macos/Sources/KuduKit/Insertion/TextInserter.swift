@@ -42,10 +42,13 @@ public final class TextInserter {
         return .paste
     }
 
-    /// The character right before the cursor, used to decide spacing and capitalization.
-    public func precedingCharacter() -> Character? {
-        guard let element = focusedElement(),
-              let value = copyAttribute(element, kAXValueAttribute) as? String,
+    /// Up to `limit` characters before the cursor in the focused field, read through
+    /// Accessibility. Used for spacing, capitalization and as context for formatting.
+    /// Nil when the app doesn't expose its text (many web and Electron fields).
+    public func textBeforeCursor(limit: Int = 500) -> String? {
+        guard let element = focusedElement() else { return nil }
+        AXUIElementSetMessagingTimeout(element, 0.1)
+        guard let value = copyAttribute(element, kAXValueAttribute) as? String,
               let rangeValue = copyAttribute(element, kAXSelectedTextRangeAttribute),
               CFGetTypeID(rangeValue) == AXValueGetTypeID()
         else { return nil }
@@ -53,10 +56,15 @@ public final class TextInserter {
         guard AXValueGetValue(rangeValue as! AXValue, .cfRange, &range), range.location > 0 else { return nil }
         let utf16 = value.utf16
         guard range.location <= utf16.count,
-              let index = utf16.index(utf16.startIndex, offsetBy: range.location - 1, limitedBy: utf16.endIndex),
-              let scalarIndex = index.samePosition(in: value)
+              let end = utf16.index(utf16.startIndex, offsetBy: range.location, limitedBy: utf16.endIndex),
+              let endIndex = end.samePosition(in: value)
         else { return nil }
-        return value[scalarIndex]
+        return String(value[..<endIndex].suffix(limit))
+    }
+
+    /// The character right before the cursor, used to decide spacing and capitalization.
+    public func precedingCharacter() -> Character? {
+        textBeforeCursor(limit: 1)?.last
     }
 
     // MARK: - Accessibility

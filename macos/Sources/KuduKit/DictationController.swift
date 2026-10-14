@@ -67,6 +67,15 @@ public final class DictationController: ObservableObject {
     public var smartFormattingAvailable: Bool { formatter.isAvailable }
     private var recordingStartedAt: ContinuousClock.Instant?
     private var transcriptionTask: Task<Void, Never>?
+    /// Transcribes and formats phrases while the user is still speaking.
+    private var streaming: StreamingSession?
+    /// Where the current dictation is going, captured when it starts.
+    private var target: Target?
+
+    private struct Target {
+        var bundleID: String?
+        var context: TextContext
+    }
     private var lastShortTapAt: ContinuousClock.Instant?
     private var ignoreNextRelease = false
     private let doubleTapWindow: Duration = .milliseconds(400)
@@ -104,6 +113,14 @@ public final class DictationController: ObservableObject {
         recorder.onLevel = { level in
             Task { @MainActor in overlayModel.push(rms: level) }
         }
+        // The start sound plays when the microphone is actually live, so speaking on the
+        // tone never loses the first word (the mic is off between dictations).
+        recorder.onLive = { [weak self] in
+            Task { @MainActor in
+                guard let self, self.isRecording else { return }
+                self.sounds.playStart()
+            }
+        }
     }
 
     /// Call once at launch, and again after permissions change.
@@ -116,7 +133,7 @@ public final class DictationController: ObservableObject {
         if case .missing = modelState, ParakeetEngine.isDownloaded {
             Task { await loadModel() }
         }
-        if store.cleanup.smartFormatting != .off { formatter.prewarm() }
+        if store.cleanup.editingStrength != .verbatim { formatter.prewarm() }
     }
 
     /// Plays the overlay through every state with a synthetic voice-like signal, so its look
@@ -272,7 +289,34 @@ public final class DictationController: ObservableObject {
         hotkey.isDictating = true
         recordingStartedAt = .now
         overlay.show(.recording)
-        sounds.playStart()
+        startStreaming()
+    }
+
+    /// Captures the destination (app, style, text around the cursor) and starts working on
+    /// the dictation while it is being spoken.
+    private func startStreaming() {
+        let bundleID = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        let category = AppContext.category(for: bundleID)
+        let settings = store.cleanup
+        let fieldBefore = inserter.textBeforeCursor()
+        let context = TextContext(
+            category: category, precedingCharacter: fieldBefore?.last, style: settings.styles.style(for: category)
+        )
+        target = Target(bundleID: bundleID, context: context)
+        let session = StreamingSession(
+            recorder: recorder, engine: engine, formatter: formatter,
+            settings: StreamingSession.Settings(
+                before: TextPipeline.beforeFormatting(settings: settings, dictionary: store.dictionary),
+                request: FormatRequest(
+                    text: "", category: category, style: context.style, strength: settings.editingStrength,
+                    terms: store.dictionary.map(\.written), fieldBefore: fieldBefore
+                ),
+                // Code editors and terminals get the rule cleanup only: no prose formatting.
+                formattingAvailable: formatter.isAvailable && category != .code && settings.editingStrength != .verbatim
+            )
+        )
+        streaming = session
+        session.start()
     }
 
     private func cancelRecording() {
@@ -280,6 +324,8 @@ public final class DictationController: ObservableObject {
         _ = recorder.stop()
         isRecording = false
         hotkey.isDictating = false
+        streaming?.cancel()
+        streaming = nil
         overlay.hide()
         // Only make a sound for a real dictation being cancelled, not a key chord.
         if let started = recordingStartedAt, ContinuousClock.now - started >= minimumDuration {
@@ -293,6 +339,12 @@ public final class DictationController: ObservableObject {
         isRecording = false
         hotkey.isDictating = false
 
+        // Stop the background work unless this turns into a real dictation below.
+        defer {
+            streaming?.cancel()
+            streaming = nil
+        }
+
         if let started = recordingStartedAt, ContinuousClock.now - started < minimumDuration {
             overlay.hide()
             return
@@ -304,45 +356,35 @@ public final class DictationController: ObservableObject {
             return
         }
 
+        guard let session = streaming, let target else { return }
+        streaming = nil // handed to the task below; the deferred cancel no longer applies
         overlay.show(.transcribing)
         isTranscribing = true
         sounds.playStop()
         let releasedAt = ContinuousClock.now
-        let frontmost = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
-        let category = AppContext.category(for: frontmost)
-        let context = TextContext(category: category, precedingCharacter: inserter.precedingCharacter())
         let settings = store.cleanup
         // Read the clipboard now, on the main thread, and only if a snippet can use it.
         let clipboardText = store.snippets.contains { $0.expansion.contains("{clipboard}") }
             ? NSPasteboard.general.string(forType: .string) : nil
         let snippets = SnippetStage(snippets: store.snippets, clipboard: { clipboardText })
-        let before = TextPipeline.beforeFormatting(settings: settings, dictionary: store.dictionary)
         let after = TextPipeline.afterFormatting(settings: settings)
-        let terms = store.dictionary.map(\.written)
         let audioSeconds = Double(samples.count) / AudioRecorder.sampleRate
 
-        transcriptionTask = Task { [engine, formatter, signposter] in
+        transcriptionTask = Task { [signposter] in
             defer {
                 self.transcriptionTask = nil
                 self.isTranscribing = false
             }
             let interval = signposter.beginInterval("dictation")
             do {
-                let raw = try await engine.transcribe(samples)
-                var text: String
-                var formatted = false
-                if let expansion = snippets.match(raw) {
+                let result = try await session.finish(samples: samples)
+                var text = result.text
+                var formatted = result.formatted
+                if let expansion = snippets.match(result.raw) {
                     text = expansion
-                } else {
-                    text = before.process(raw, context: context)
-                    // Code editors and terminals get the rule cleanup only: no prose formatting.
-                    if category != .code, settings.smartFormatting.applies(toWordCount: WordCount.count(text)),
-                       let result = await formatter.format(text, category: category, terms: terms) {
-                        text = result
-                        formatted = true
-                    }
+                    formatted = false
                 }
-                text = after.process(text, context: context)
+                text = after.process(text, context: target.context)
 
                 self.overlay.hide()
                 if !text.isEmpty {
@@ -354,8 +396,8 @@ public final class DictationController: ObservableObject {
                 self.lastLatencyMs = latency
                 if !text.isEmpty {
                     self.history.append(DictationRecord(
-                        raw: raw, text: text, audioSeconds: audioSeconds, latencyMs: latency,
-                        bundleID: frontmost, formatted: formatted
+                        raw: result.raw, text: text, audioSeconds: audioSeconds, latencyMs: latency,
+                        bundleID: target.bundleID, formatted: formatted
                     ))
                 }
                 self.log.info(

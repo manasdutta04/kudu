@@ -121,10 +121,10 @@ private struct HeroCard: View {
 
     private var formattingLabel: String {
         guard controller.smartFormattingAvailable else { return "Rule cleanup" }
-        switch controller.store.cleanup.smartFormatting {
-        case .off: return "Formatting off"
-        case .longDictations: return "Smart formatting"
-        case .always: return "Smart formatting: always"
+        switch controller.store.cleanup.editingStrength {
+        case .verbatim: return "Verbatim"
+        case .light: return "Smart formatting"
+        case .polished: return "Polished"
         }
     }
 }

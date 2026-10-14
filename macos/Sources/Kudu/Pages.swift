@@ -148,8 +148,8 @@ struct StylePage: View {
 
             Form {
                 Section {
-                    Picker("Smart formatting", selection: $store.cleanup.smartFormatting) {
-                        ForEach(SmartFormatting.allCases) { Text($0.title).tag($0) }
+                    Picker("Editing", selection: $store.cleanup.editingStrength) {
+                        ForEach(EditingStrength.allCases) { Text($0.title).tag($0) }
                     }
                     .pickerStyle(.segmented)
                     .disabled(!controller.smartFormattingAvailable)
@@ -182,7 +182,7 @@ struct StylePage: View {
         guard controller.smartFormattingAvailable else {
             return "Needs macOS 26 or later with Apple Intelligence turned on. Kudu uses the rule cleanup below instead."
         }
-        return "Uses Apple's on-device model to add punctuation, paragraphs, lists and written numbers, without changing your words. Longer dictations (\(SmartFormatting.minimumWords)+ words) take about a second extra; short phrases stay instant. Nothing leaves your Mac."
+        return "Uses Apple's on-device model to add punctuation, paragraphs, lists and written numbers, without changing your words. Short phrases stay instant. Nothing leaves your Mac."
     }
 }
 

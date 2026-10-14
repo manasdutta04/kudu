@@ -11,6 +11,9 @@ public final class AudioRecorder: @unchecked Sendable {
 
     /// Called on the audio thread with the raw RMS amplitude of each captured buffer (~20 ms).
     public var onLevel: (@Sendable (Float) -> Void)?
+    /// Called on the audio thread when the microphone delivers its first audio after `start()`:
+    /// the moment the user can start talking without losing a word.
+    public var onLive: (@Sendable () -> Void)?
 
 
     private let engine = AVAudioEngine()
@@ -74,6 +77,14 @@ public final class AudioRecorder: @unchecked Sendable {
 
     public var isRecording: Bool { state.withLock { $0.isRecording } }
 
+    /// A copy of what has been recorded so far, from sample `index` on, without stopping.
+    public func samples(from index: Int) -> [Float] {
+        state.withLock { state in
+            guard index < state.samples.count else { return [] }
+            return Array(state.samples[index...])
+        }
+    }
+
     // MARK: - Private
 
     /// Stops the audio hardware (the microphone indicator goes off) and prepares the engine
@@ -119,6 +130,7 @@ public final class AudioRecorder: @unchecked Sendable {
             return ContinuousClock.now - requested
         }
         if let startupDelay {
+            onLive?()
             log.info("Microphone delivered first audio after \(Int(startupDelay / .milliseconds(1))) ms")
         }
     }
