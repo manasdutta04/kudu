@@ -5,7 +5,7 @@
 - [x] Kudu logo as the app icon and an animated menu-bar icon
 - [x] Smart formatting with Apple's on-device model: punctuation, paragraphs, lists, written numbers
 - [x] History saved on device, with retention and clear
-- [x] Fewer clipped words: audio padding and a warm microphone after each dictation
+- [x] Fewer clipped words: silence padding around each recording
 - [x] fn never opens the emoji picker while Kudu runs; overlay follows the Dock and full-screen apps
 
 ## v0.2
