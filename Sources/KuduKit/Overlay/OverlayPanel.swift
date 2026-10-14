@@ -74,6 +74,36 @@ public final class OverlayPanel {
         let host = NSHostingView(rootView: OverlayView(model: model))
         host.frame = NSRect(origin: .zero, size: canvas)
         panel.contentView = host
+        observeLayoutChanges()
+    }
+
+    /// Switching apps or Spaces can show or hide the Dock (full-screen apps hide it), so move
+    /// the pill while it's visible. Checked again shortly after, because the frontmost app and
+    /// its full-screen state settle a moment after the switch.
+    private func observeLayoutChanges() {
+        let center = NSWorkspace.shared.notificationCenter
+        for name in [NSWorkspace.didActivateApplicationNotification, NSWorkspace.activeSpaceDidChangeNotification] {
+            center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.layoutDidChange() }
+            }
+        }
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.layoutDidChange() }
+        }
+    }
+
+    private func layoutDidChange() {
+        guard panel.isVisible else { return }
+        position(animated: true)
+        Task { @MainActor [weak self] in
+            for delay in [250, 700] {
+                try? await Task.sleep(for: .milliseconds(delay))
+                guard let self, self.panel.isVisible else { return }
+                self.position(animated: true)
+            }
+        }
     }
 
     public func show(_ phase: OverlayModel.Phase) {
@@ -83,7 +113,7 @@ public final class OverlayPanel {
             model.isLocked = false
         }
         guard !panel.isVisible else { return }
-        position()
+        position(animated: false)
         panel.orderFrontRegardless()
     }
 
@@ -102,7 +132,7 @@ public final class OverlayPanel {
 
     /// Bottom-center of the screen containing the mouse: just above the Dock when the Dock is
     /// showing, otherwise close to the bottom edge (full-screen apps, auto-hidden Dock).
-    private func position() {
+    private func position(animated: Bool) {
         let mouse = NSEvent.mouseLocation
         guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }) ?? NSScreen.main
         else { return }
@@ -113,7 +143,17 @@ public final class OverlayPanel {
         // The pill is vertically centered in the transparent canvas.
         let pillHeight: CGFloat = 26
         let y = floor + gap - (canvas.height - pillHeight) / 2
-        panel.setFrameOrigin(NSPoint(x: screen.frame.midX - canvas.width / 2, y: y))
+        let origin = NSPoint(x: screen.frame.midX - canvas.width / 2, y: y)
+        guard panel.frame.origin != origin else { return }
+        if animated {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.22
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                panel.animator().setFrameOrigin(origin)
+            }
+        } else {
+            panel.setFrameOrigin(origin)
+        }
     }
 }
 
