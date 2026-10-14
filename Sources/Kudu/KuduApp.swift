@@ -34,6 +34,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         restoreSystemStateOnSignals()
         controller.activate()
+        if CommandLine.arguments.contains("--overlay-demo") {
+            controller.runOverlayDemo()
+            return
+        }
         if !Permissions.accessibilityGranted || !Permissions.microphoneGranted || controller.modelState == .missing {
             OnboardingWindow.open()
         }

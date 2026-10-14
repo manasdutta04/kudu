@@ -101,7 +101,7 @@ public final class DictationController: ObservableObject {
         hotkey.onEvent = { [weak self] event in self?.handle(event) }
         let overlayModel = overlay.model
         recorder.onLevel = { level in
-            Task { @MainActor in overlayModel.push(level: level) }
+            Task { @MainActor in overlayModel.push(rms: level) }
         }
     }
 
@@ -115,6 +115,29 @@ public final class DictationController: ObservableObject {
         updateFnGuard()
         if case .missing = modelState, ParakeetEngine.isDownloaded {
             Task { await loadModel() }
+        }
+    }
+
+    /// Plays the overlay through every state with a synthetic voice-like signal, so its look
+    /// can be checked without speaking. Launch with `--overlay-demo`.
+    public func runOverlayDemo() {
+        Task { @MainActor in
+            let model = overlay.model
+            overlay.show(.recording)
+            let start = ContinuousClock.now
+            var step = 0
+            while ContinuousClock.now - start < .seconds(6) {
+                if step == 150 { model.isLocked = true }
+                // Syllable-like bursts riding on a slower phrase envelope.
+                let t = Double(step) * 0.02
+                let syllable = max(0, sin(t * 2 * .pi * 3.1)) * (0.6 + 0.4 * sin(t * 2 * .pi * 0.45))
+                model.push(rms: Float(0.002 + 0.12 * syllable * syllable))
+                step += 1
+                try? await Task.sleep(for: .milliseconds(20))
+            }
+            overlay.show(.transcribing)
+            try? await Task.sleep(for: .seconds(1.5))
+            overlay.flash("No sound from the microphone", for: .seconds(2))
         }
     }
 
