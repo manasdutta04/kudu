@@ -3,8 +3,12 @@
 All notable changes to Kudu are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com) and the project uses [Semantic Versioning](https://semver.org).
 
-## [Unreleased] - Windows and Linux
-### Added
+## [0.8.0] - 2026-10-14
+First release with downloadable packages for macOS, Windows and Linux.
+
+### Windows and Linux (beta)
+- **Release packages:** Kudu for macOS (.dmg/.zip), Windows (.zip) and Linux (.tar.gz) on
+  GitHub Releases, with one-command install scripts that also clear the unsigned-app warnings.
 - **Kudu for Windows and Linux** (`desktop/`, Rust), in beta. The same text cleanup, styles,
   dictionary, snippets, learning and shortcuts as the Mac app, from a shared core.
 - Speech on the CPU: Parakeet (Accurate, 482 MB download) or Moonshine (Compact, 251 MB).
@@ -17,7 +21,6 @@ All notable changes to Kudu are listed here. The format follows
   and a StatusNotifierItem tray.
 - A settings window with Home, Insights, Dictionary, Snippets, Style and Settings.
 
-## [0.8.0] - 2026-10-14
 ### Added
 - **Customizable shortcuts.** Settings → Shortcuts: click Change and press the keys you want
   for dictation, Command mode and paste last transcript. Modifier keys alone (fn, Right ⌥,

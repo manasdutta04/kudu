@@ -2626,7 +2626,7 @@ dependencies = [
 
 [[package]]
 name = "kudu-app"
-version = "0.1.0"
+version = "0.8.0"
 dependencies = [
  "ab_glyph",
  "anyhow",
@@ -2662,7 +2662,7 @@ dependencies = [
 
 [[package]]
 name = "kudu-core"
-version = "0.1.0"
+version = "0.8.0"
 dependencies = [
  "fancy-regex",
  "regex",
@@ -2672,7 +2672,7 @@ dependencies = [
 
 [[package]]
 name = "kudu-engine"
-version = "0.1.0"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "bzip2 0.6.1",

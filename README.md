@@ -11,6 +11,34 @@ cloud, no telemetry.
 | 🪶 **Light** | ~14 MB app; the speech model (~450 MB) downloads once, then works offline |
 | 🧩 **Native** | A native app per platform, not a web wrapper |
 
+## Install
+
+Download from [Releases](https://github.com/manasdutta04/kudu/releases/latest), or use one command.
+The apps aren't signed with paid certificates yet; these commands install Kudu and clear the
+"unidentified developer" warning.
+
+**macOS** (Apple Silicon, macOS 14+)
+```bash
+curl -fsSL https://github.com/manasdutta04/kudu/releases/latest/download/install-macos.sh | bash
+```
+Installed by hand (dragged from the .dmg)? Run this once so macOS opens the unsigned app:
+```bash
+xattr -cr /Applications/Kudu.app
+```
+
+**Windows 10/11** (beta), in PowerShell
+```powershell
+irm https://github.com/manasdutta04/kudu/releases/latest/download/install.ps1 | iex
+```
+Installed by hand? Run `Unblock-File .\kudu.exe` in its folder, or click **More info → Run anyway**
+when SmartScreen appears.
+
+**Linux** (beta, x86_64, X11 and Wayland)
+```bash
+curl -fsSL https://github.com/manasdutta04/kudu/releases/latest/download/install.sh | sh
+```
+It asks for `sudo` once to let Kudu read the keyboard and type; log out and back in after.
+
 ## Platforms
 
 | Platform | Status | Folder |
