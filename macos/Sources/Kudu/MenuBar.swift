@@ -69,53 +69,72 @@ struct MenuBarLabel: View {
     }
 }
 
-/// The small popover under the menu-bar icon: status, the last dictation, and a way into the app.
+/// The menu under the menu-bar icon: a native menu, so it looks and behaves like the rest of
+/// macOS (keyboard navigation, checkmarks, submenus).
 struct MenuContent: View {
     @ObservedObject var controller: DictationController
     @ObservedObject var history: HistoryStore
+    @ObservedObject var store: UserDataStore
+    @ObservedObject var navigation: Navigation
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(nsImage: KuduMark.image(size: NSSize(width: 18, height: 18), template: true))
-                Text("Kudu").font(.headline)
-                Spacer()
-                StatusBadge(controller: controller)
-            }
+        Text(status)
 
-            if let last = history.records.first {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(last.text)
-                        .font(.callout)
-                        .lineLimit(4)
-                        .textSelection(.enabled)
-                    HStack {
-                        Text("\(last.latencyMs) ms after release").font(.caption).foregroundStyle(.secondary)
-                        Spacer()
-                        Button("Copy") { controller.copyToClipboard(last) }.controlSize(.small)
-                    }
-                }
-            } else {
-                Text(controller.recordingMode.hint(for: controller.trigger))
-                    .font(.callout).foregroundStyle(.secondary)
-            }
+        Divider()
 
-            Divider()
+        Button("Open Kudu") { show(.home) }
+        Button("Paste last transcript") { controller.pasteLastTranscript() }
+            .keyboardShortcut("v", modifiers: [.control, .command])
+            .disabled(history.records.isEmpty)
 
-            HStack {
-                Button("Open Kudu") {
-                    NSApp.activate(ignoringOtherApps: true)
-                    openWindow(id: WindowID.main)
-                }
-                .keyboardShortcut(.defaultAction)
-                Spacer()
-                Button("Quit") { NSApp.terminate(nil) }
-                    .keyboardShortcut("q")
-            }
+        Divider()
+
+        Picker("Dictation key", selection: $controller.trigger) {
+            ForEach(TriggerKey.allCases) { Text($0.displayName).tag($0) }
         }
-        .padding(14)
-        .frame(width: 290)
+        Picker("Recording", selection: $controller.recordingMode) {
+            ForEach(RecordingMode.allCases) { Text($0.title).tag($0) }
+        }
+        Picker("Microphone", selection: $controller.microphoneUID) {
+            Text("System default").tag(String?.none)
+            ForEach(controller.microphones) { Text($0.name).tag(Optional($0.uid)) }
+        }
+        Picker("Editing", selection: $store.cleanup.editingStrength) {
+            ForEach(EditingStrength.allCases) { Text($0.title).tag($0) }
+        }
+        Toggle("Sounds", isOn: $controller.soundsEnabled)
+
+        Divider()
+
+        Button("Settings…") { show(.settings) }
+            .keyboardShortcut(",", modifiers: .command)
+        Button("Help & feedback") {
+            NSWorkspace.shared.open(URL(string: "https://github.com/manasdutta04/kudu/issues")!)
+        }
+
+        Divider()
+
+        Button("Quit Kudu") { NSApp.terminate(nil) }
+            .keyboardShortcut("q", modifiers: .command)
+    }
+
+    private func show(_ page: Page) {
+        navigation.page = page
+        NSApp.activate(ignoringOtherApps: true)
+        openWindow(id: WindowID.main)
+    }
+
+    private var status: String {
+        switch controller.modelState {
+        case .ready where controller.hotkeyActive:
+            "Kudu is ready · hold \(controller.trigger.shortName) to dictate"
+        case .ready: "Kudu needs Accessibility permission"
+        case .downloading(let fraction): "Downloading speech model… \(Int(fraction * 100))%"
+        case .loading: "Loading speech model…"
+        case .missing: "Finish setting up in Kudu"
+        case .failed: "Speech model error: open Kudu"
+        }
     }
 }
 

@@ -91,14 +91,14 @@ struct SetupCard: View {
                     Permissions.resetAccessibility()
                     Permissions.openSettings(.accessibility)
                 }
-                .controlSize(.small)
+                .buttonStyle(QuietButtonStyle())
             }
             .padding(.leading, 40)
         } else if !controller.hotkeyActive {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text("Accessibility is on. Relaunch Kudu to start listening.")
                     .font(.caption).foregroundStyle(.secondary)
-                Button("Relaunch") { Permissions.relaunch() }.controlSize(.small)
+                Button("Relaunch") { Permissions.relaunch() }.buttonStyle(QuietButtonStyle())
             }
             .padding(.leading, 40)
         }
@@ -145,7 +145,7 @@ private struct SetupStep<Action: View>: View {
                 Text(detail).font(.callout).foregroundStyle(.secondary)
             }
             Spacer()
-            if !done { action() }
+            if !done { action().buttonStyle(QuietButtonStyle(prominent: true)) }
         }
     }
 }

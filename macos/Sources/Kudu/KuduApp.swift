@@ -7,17 +7,20 @@ struct KuduApp: App {
 
     var body: some Scene {
         Window("Kudu", id: WindowID.main) {
-            MainWindow(controller: appDelegate.controller)
+            MainWindow(controller: appDelegate.controller, navigation: appDelegate.navigation)
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1080, height: 720)
 
         MenuBarExtra {
-            MenuContent(controller: appDelegate.controller, history: appDelegate.controller.history)
+            MenuContent(
+                controller: appDelegate.controller, history: appDelegate.controller.history,
+                store: appDelegate.controller.store, navigation: appDelegate.navigation
+            )
         } label: {
             MenuBarLabel(controller: appDelegate.controller)
         }
-        .menuBarExtraStyle(.window)
+        .menuBarExtraStyle(.menu)
     }
 }
 
@@ -28,6 +31,7 @@ enum WindowID {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let controller = DictationController()
+    let navigation = Navigation()
 
     private var signalSources: [DispatchSourceSignal] = []
 

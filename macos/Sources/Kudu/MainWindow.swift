@@ -42,12 +42,8 @@ final class Navigation: ObservableObject {
 /// rounded panel. The title bar is hidden; the traffic lights sit over the sidebar.
 struct MainWindow: View {
     @ObservedObject var controller: DictationController
-    @StateObject private var navigation: Navigation
-
-    init(controller: DictationController, page: Page = .home) {
-        self.controller = controller
-        _navigation = StateObject(wrappedValue: Navigation(page: page))
-    }
+    /// Shared with the menu bar, so "Settings…" there opens this window on Settings.
+    @ObservedObject var navigation: Navigation
 
     var body: some View {
         HStack(spacing: 0) {

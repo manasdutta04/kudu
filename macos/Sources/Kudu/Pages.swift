@@ -80,6 +80,31 @@ private struct Row<Control: View>: View {
     }
 }
 
+/// A switch in the app's accent color.
+private struct AccentSwitch: View {
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Toggle("", isOn: $isOn).labelsHidden().toggleStyle(.switch).tint(Theme.accent).controlSize(.small)
+    }
+}
+
+/// A soft text field that matches the cards.
+private struct Field: View {
+    let prompt: String
+    @Binding var text: String
+
+    var body: some View {
+        TextField(prompt, text: $text)
+            .textFieldStyle(.plain)
+            .font(.system(size: 13))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Theme.hairline))
+    }
+}
+
 // MARK: - Dictionary
 
 struct DictionaryPage: View {
@@ -93,17 +118,17 @@ struct DictionaryPage: View {
                 subtitle: "Names, products and jargon Kudu should spell your way. Add how it tends to mishear them."
             )
             HStack(spacing: 10) {
-                TextField("Spelling, e.g. Kudu", text: $draft.first)
-                TextField("Heard as, e.g. kudoo, coo doo", text: $draft.second)
+                Field(prompt: "Spelling, e.g. Kudu", text: $draft.first)
+                Field(prompt: "Heard as, e.g. kudoo, coo doo", text: $draft.second)
                 Button("Add") {
                     let heard = draft.second.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
                     store.dictionary.append(DictionaryEntry(heard: heard, written: draft.first))
                     draft.clear()
                 }
                 .keyboardShortcut(.defaultAction)
+                .buttonStyle(QuietButtonStyle(prominent: true))
                 .disabled(draft.first.trimmingCharacters(in: .whitespaces).isEmpty)
             }
-            .textFieldStyle(.roundedBorder)
 
             if store.dictionary.isEmpty {
                 EmptyState(symbol: "character.book.closed", text: "No words yet. Add names and terms Kudu gets wrong.")
@@ -117,8 +142,9 @@ struct DictionaryPage: View {
                             Spacer()
                             Button(role: .destructive) {
                                 store.dictionary.removeAll { $0.id == entry.id }
-                            } label: { Image(systemName: "trash") }
+                            } label: { Image(systemName: "trash").font(.system(size: 12)) }
                                 .buttonStyle(.borderless)
+                                .foregroundStyle(.secondary)
                         }
                         .padding(.horizontal, 18)
                         .padding(.vertical, 12)
@@ -143,16 +169,16 @@ struct SnippetsPage: View {
                 subtitle: "Say a trigger on its own to insert saved text. Placeholders: {date}, {time}, {clipboard}."
             )
             HStack(spacing: 10) {
-                TextField("Trigger, e.g. my email", text: $draft.first)
-                TextField("Inserts", text: $draft.second)
+                Field(prompt: "Trigger, e.g. my email", text: $draft.first)
+                Field(prompt: "Inserts", text: $draft.second)
                 Button("Add") {
                     store.snippets.append(Snippet(trigger: draft.first, expansion: draft.second))
                     draft.clear()
                 }
                 .keyboardShortcut(.defaultAction)
+                .buttonStyle(QuietButtonStyle(prominent: true))
                 .disabled(draft.first.isEmpty || draft.second.isEmpty)
             }
-            .textFieldStyle(.roundedBorder)
 
             if store.snippets.isEmpty {
                 EmptyState(symbol: "text.badge.plus", text: "No snippets yet. Try “my email” → your address.")
@@ -167,8 +193,9 @@ struct SnippetsPage: View {
                             Spacer()
                             Button(role: .destructive) {
                                 store.snippets.removeAll { $0.id == snippet.id }
-                            } label: { Image(systemName: "trash") }
+                            } label: { Image(systemName: "trash").font(.system(size: 12)) }
                                 .buttonStyle(.borderless)
+                                .foregroundStyle(.secondary)
                         }
                         .padding(.horizontal, 18)
                         .padding(.vertical, 12)
@@ -207,11 +234,7 @@ struct StylePage: View {
 
             Section(title: "Editing", footer: editingFooter) {
                 VStack(alignment: .leading, spacing: 10) {
-                    Picker("Editing", selection: $store.cleanup.editingStrength) {
-                        ForEach(EditingStrength.allCases) { Text($0.title).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    .labelsHidden()
+                    ChipPicker(items: EditingStrength.allCases, selection: $store.cleanup.editingStrength) { $0.title }
                     Text(store.cleanup.editingStrength.summary).font(.callout).foregroundStyle(.secondary)
                 }
                 .padding(18)
@@ -227,16 +250,16 @@ struct StylePage: View {
 
             Section(title: "Cleanup", footer: "These rules run instantly on every dictation.") {
                 Row(title: "Remove filler words", detail: "um, uh, erm") {
-                    Toggle("", isOn: $store.cleanup.removeFillers).labelsHidden().toggleStyle(.switch)
+                    AccentSwitch(isOn: $store.cleanup.removeFillers)
                 }
                 Row(title: "Apply spoken corrections", detail: "“Tuesday, no, Wednesday” → “Wednesday”") {
-                    Toggle("", isOn: $store.cleanup.applySelfCorrections).labelsHidden().toggleStyle(.switch)
+                    AccentSwitch(isOn: $store.cleanup.applySelfCorrections)
                 }
                 Row(title: "Line break commands", detail: "Say “new line” or “new paragraph”") {
-                    Toggle("", isOn: $store.cleanup.spokenCommands).labelsHidden().toggleStyle(.switch)
+                    AccentSwitch(isOn: $store.cleanup.spokenCommands)
                 }
                 Row(title: "Write times as 10:30", divider: false) {
-                    Toggle("", isOn: $store.cleanup.normalizeTimes).labelsHidden().toggleStyle(.switch)
+                    AccentSwitch(isOn: $store.cleanup.normalizeTimes)
                 }
             }
         }
@@ -269,12 +292,8 @@ private struct StyleRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 Spacer(minLength: 12)
-                Picker("", selection: $style) {
-                    ForEach(WritingStyle.allCases) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .labelsHidden()
-                .frame(width: 250)
+                ChipPicker(items: WritingStyle.allCases, selection: $style) { $0.title }
+                    .frame(width: 300)
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 12)
@@ -302,22 +321,39 @@ struct SettingsPage: View {
 
             Section(title: "Dictation") {
                 Row(title: "Dictation key") {
-                    Picker("", selection: $controller.trigger) {
-                        ForEach(TriggerKey.allCases) { Text($0.displayName).tag($0) }
-                    }
-                    .labelsHidden().frame(width: 220)
+                    ValueMenu($controller.trigger) { $0.displayName }
                 }
                 Row(title: "Recording", detail: controller.recordingMode.hint(for: controller.trigger)) {
-                    Picker("", selection: $controller.recordingMode) {
-                        ForEach(RecordingMode.allCases) { Text($0.title).tag($0) }
-                    }
-                    .labelsHidden().frame(width: 260)
+                    ValueMenu($controller.recordingMode) { $0.title }
+                }
+                Row(title: "Microphone", detail: "Kudu opens it only while you dictate.") {
+                    ValueMenu(
+                        items: [MicrophoneChoice(uid: nil, name: "System default")]
+                            + controller.microphones.map { MicrophoneChoice(uid: $0.uid, name: $0.name) },
+                        selection: $controller.microphoneUID, value: \.uid, title: \.name
+                    )
                 }
                 if controller.trigger == .fn {
                     Row(title: "Stop fn from opening the emoji picker", detail: "Only while Kudu is running.", divider: false) {
-                        Toggle("", isOn: $controller.preventEmojiPicker).labelsHidden().toggleStyle(.switch)
+                        AccentSwitch(isOn: $controller.preventEmojiPicker)
                     }
                 }
+            }
+
+            Section(title: "Shortcuts") {
+                ShortcutRow(title: "Dictate", keys: [controller.trigger.shortName], prefix: "Hold")
+                if controller.recordingMode != .holdOnly {
+                    ShortcutRow(
+                        title: "Hands-free",
+                        keys: [controller.trigger.shortName],
+                        prefix: controller.recordingMode == .tapToToggle ? "Tap" : "Double-tap"
+                    )
+                }
+                if controller.trigger == .fn {
+                    ShortcutRow(title: "Command mode", keys: ["fn", "⌃"], prefix: "Hold")
+                }
+                ShortcutRow(title: "Paste last transcript", keys: ["⌃", "⌘", "V"])
+                ShortcutRow(title: "Cancel", keys: ["esc"], prefix: "While dictating", divider: false)
             }
 
             Section(title: "Command mode") {
@@ -336,23 +372,20 @@ struct SettingsPage: View {
 
             Section(title: "General") {
                 Row(title: "Sounds") {
-                    Toggle("", isOn: $controller.soundsEnabled).labelsHidden().toggleStyle(.switch)
+                    AccentSwitch(isOn: $controller.soundsEnabled)
                 }
                 Row(title: "Open Kudu at login", divider: false) {
-                    Toggle("", isOn: Binding(get: { launchAtLogin.isEnabled }, set: { launchAtLogin.set($0) }))
-                        .labelsHidden().toggleStyle(.switch)
+                    AccentSwitch(isOn: Binding(get: { launchAtLogin.isEnabled }, set: { launchAtLogin.set($0) }))
                 }
             }
 
             Section(title: "Privacy", footer: "The microphone is on only while you dictate. Audio is never saved; history stays on this Mac.") {
                 Row(title: "Keep history") {
-                    Picker("", selection: $history.retention) {
-                        ForEach(HistoryRetention.allCases) { Text($0.title).tag($0) }
-                    }
-                    .labelsHidden().frame(width: 140)
+                    ValueMenu($history.retention) { $0.title }
                 }
-                Row(title: "\(history.records.count) dictations saved", divider: false) {
-                    Button("Clear history…", role: .destructive) { confirm.clearHistory = true }
+                Row(title: "\(history.records.count) dictations saved on this Mac", divider: false) {
+                    Button("Clear history…") { confirm.clearHistory = true }
+                        .buttonStyle(QuietButtonStyle(destructive: true))
                         .disabled(history.records.isEmpty)
                 }
             }
@@ -387,6 +420,25 @@ struct SettingsPage: View {
     }
 }
 
+private struct MicrophoneChoice: Identifiable {
+    let uid: String?
+    let name: String
+    var id: String { uid ?? "default" }
+}
+
+private struct ShortcutRow: View {
+    let title: String
+    let keys: [String]
+    var prefix: String?
+    var divider = true
+
+    var body: some View {
+        Row(title: title, divider: divider) {
+            Shortcut(keys: keys, prefix: prefix)
+        }
+    }
+}
+
 private struct PermissionRow: View {
     let title: String
     let granted: Bool
@@ -396,9 +448,9 @@ private struct PermissionRow: View {
     var body: some View {
         Row(title: title, divider: divider) {
             if granted {
-                Label("Allowed", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                Label("Allowed", systemImage: "checkmark.circle.fill").font(.system(size: 12.5)).foregroundStyle(.green)
             } else {
-                Button("Open Settings", action: open)
+                Button("Open Settings", action: open).buttonStyle(QuietButtonStyle())
             }
         }
     }
