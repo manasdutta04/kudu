@@ -50,6 +50,15 @@ let streamMode = arguments.contains("--stream")
 let formatting = arguments.contains("--format") || streamMode
 let textMode = arguments.contains("--text")
 arguments.removeAll { $0 == "--format" || $0 == "--text" || $0 == "--stream" }
+/// "--app Slack --category workMessage": shape formatting for that destination.
+@MainActor func option(_ name: String) -> String? {
+    guard let index = arguments.firstIndex(of: name), index + 1 < arguments.count else { return nil }
+    let value = arguments[index + 1]
+    arguments.removeSubrange(index...(index + 1))
+    return value
+}
+let appName = option("--app")
+let category = option("--category").flatMap(AppCategory.init(rawValue:)) ?? .general
 guard !arguments.isEmpty else {
     print("usage: kudu-bench [--format] <file.wav>...  |  kudu-bench --format --text \"raw words\"...")
     exit(1)
@@ -66,12 +75,18 @@ if formatting {
 func clean(_ raw: String) async -> (text: String, formatMs: Double?) {
     var text = TextPipeline.beforeFormatting(settings: settings).process(raw)
     var formatMs: Double?
-    if formatting, FormattingNeed.shouldFormat(text, strength: settings.editingStrength) {
+    let worthIt = category == .code
+        ? FormattingNeed.shouldFormatCode(text, strength: settings.editingStrength)
+        : FormattingNeed.shouldFormat(text, strength: settings.editingStrength, category: category)
+    let style = settings.styles.style(for: category)
+    if formatting, worthIt {
         let start = ContinuousClock.now
-        if let formatted = await formatter.format(FormatRequest(text: text)) { text = formatted }
+        let request = FormatRequest(text: text, category: category, style: style, appName: appName)
+        if let formatted = await formatter.format(request) { text = formatted }
         formatMs = (ContinuousClock.now - start) / .milliseconds(1)
     }
-    return (TextPipeline.afterFormatting(settings: settings).process(text), formatMs)
+    let context = TextContext(category: category, style: style)
+    return (TextPipeline.afterFormatting(settings: settings).process(text, context: context), formatMs)
 }
 
 if textMode {

@@ -116,3 +116,30 @@ import Testing
         #expect(stage.apply(text, context: TextContext(category: .email)) == text)
     }
 }
+
+@Suite struct MentionAndCodeGuardTests {
+    @Test func tagsBecomeMentionsInChatOnly() {
+        let text = "Auth flow is done, tag priya, she should review it."
+        #expect(MentionStage().apply(text, context: TextContext(category: .workMessage)) == "Auth flow is done, @Priya, she should review it.")
+        #expect(MentionStage().apply(text, context: TextContext(category: .email)) == text)
+    }
+
+    @Test func codeGuardAcceptsSymbolsAndCamelCase() {
+        #expect(FormattingGuard.acceptCode(original: "git commit dash m fixed the auth retry loop",
+                                           formatted: "git commit -m \"fixed the auth retry loop\"") != nil)
+        #expect(FormattingGuard.acceptCode(original: "open user service dot ts and rename get user to fetch user",
+                                           formatted: "Open userService.ts and rename getUser to fetchUser.") != nil)
+    }
+
+    @Test func codeGuardRejectsInventedCode() {
+        #expect(FormattingGuard.acceptCode(original: "rename get user to fetch user",
+                                           formatted: "function fetchUser(id) { return db.users.find(id) }") == nil)
+    }
+
+    @Test func codeCuesAndProseCues() {
+        #expect(FormattingNeed.shouldFormatCode("git commit dash m fixed it", strength: .light))
+        #expect(!FormattingNeed.shouldFormatCode("yes", strength: .light))
+        #expect(FormattingNeed.shouldFormat("add two kilo atta", strength: .light))
+        #expect(FormattingNeed.shouldFormat("quick update three things first design", strength: .light))
+    }
+}

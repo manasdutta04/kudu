@@ -14,8 +14,10 @@ public struct SelfCorrection: TextStage {
 
     public init() {
         // <word>, no, | <word>, sorry, | <word>, no wait, | <word>, wait, no,
+        // "no wait" and "or rather" are unambiguous enough to count even without commas.
         inlineCue = try! NSRegularExpression(
-            pattern: "\\b[\\w'’]+,\\s+(?:no|sorry|no wait|wait,? no|or rather),\\s+", options: [.caseInsensitive]
+            pattern: "\\b[\\w'’]+(?:,\\s+(?:no|sorry|no wait|wait,? no|or rather),|,?\\s+(?:no wait|wait no|or rather),?)\\s+",
+            options: [.caseInsensitive]
         )
         // A sentence (or the start of the text) followed by "scratch that" / "delete that".
         scratchThat = try! NSRegularExpression(

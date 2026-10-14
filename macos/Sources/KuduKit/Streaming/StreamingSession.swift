@@ -49,7 +49,7 @@ public final class StreamingSession {
     private let recorder: any SampleSource
     private let engine: ParakeetEngine
     private let formatter: SmartFormatter
-    private let settings: Settings
+    private var settings: Settings
     private let log = Logger(subsystem: "app.kudu", category: "streaming")
 
     /// Formatted chunks, in order, keyed by their raw source text.
@@ -81,6 +81,13 @@ public final class StreamingSession {
                 await self.refresh()
             }
         }
+    }
+
+    /// Names and terms read from the screen after the session started; used from the next
+    /// formatting call on.
+    public func addTerms(_ terms: [String]) {
+        let known = Set(settings.request.terms)
+        settings.request.terms += terms.filter { !known.contains($0) }
     }
 
     public func cancel() {
@@ -171,7 +178,11 @@ public final class StreamingSession {
     /// chunks before it. Plain chunks are finished by the rules alone.
     private func format(_ source: String) async -> Piece {
         let clean = settings.before.process(source)
-        guard settings.formattingAvailable, FormattingNeed.shouldFormat(clean, strength: settings.request.strength) else {
+        let strength = settings.request.strength
+        let worthIt = settings.request.category == .code
+            ? FormattingNeed.shouldFormatCode(clean, strength: strength)
+            : FormattingNeed.shouldFormat(clean, strength: strength, category: settings.request.category)
+        guard settings.formattingAvailable, worthIt else {
             return Piece(source: source, text: clean, usedModel: false)
         }
         var request = settings.request

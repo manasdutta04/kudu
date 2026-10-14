@@ -79,6 +79,7 @@ extension TextPipeline {
         var stages: [any TextStage] = []
         if settings.normalizeTimes { stages.append(TimeNormalizer()) }
         stages.append(WhitespaceNormalizer())
+        stages.append(MentionStage())
         stages.append(MessageLayout())
         stages.append(LineStartCapitalizer())
         stages.append(StyleStage())

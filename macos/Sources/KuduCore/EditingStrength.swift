@@ -42,15 +42,40 @@ public enum FormattingNeed {
     /// From this many words a passage is long enough that paragraphing and run-on fixes pay off.
     public static let longPassageWords = 40
 
-    public static func shouldFormat(_ text: String, strength: EditingStrength) -> Bool {
+    public static func shouldFormat(_ text: String, strength: EditingStrength, category: AppCategory = .general) -> Bool {
         guard strength != .verbatim else { return false }
         let words = WordCount.count(text)
         if strength == .polished { return words >= 8 }
+        // An email of a few sentences benefits from paragraphs, greeting and sign-off layout.
+        if category == .email, words >= 12 { return true }
         return words >= longPassageWords || (hasStructureCues(text) && words >= 3)
     }
 
+    static let mathCue = try! NSRegularExpression(
+        pattern: "\\b(squared|cubed|derivative|integral|square root|to the power|sine|cosine|tangent)\\b",
+        options: [.caseInsensitive])
+
+    public static func hasMathCues(_ text: String) -> Bool {
+        mathCue.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
+    }
+
+    /// In code editors and terminals the model is used when the dictation names code (spoken
+    /// symbols, commands, identifiers to rename) or is a longer instruction.
+    public static func shouldFormatCode(_ text: String, strength: EditingStrength) -> Bool {
+        guard strength != .verbatim else { return false }
+        let range = NSRange(text.startIndex..., in: text)
+        return codeCue.firstMatch(in: text, range: range) != nil || WordCount.count(text) >= 10
+    }
+
+    static let codeCue = try! NSRegularExpression(
+        pattern: "\\b(dot|dash|underscore|slash|backslash|equals|camel case|snake case|quote|git|npm|yarn|brew|cd|ls|rename|function|variable|method|class)\\b",
+        options: [.caseInsensitive])
+
     static let structureCue = try! NSRegularExpression(
         pattern: "\\b(first(ly)?|second(ly)?|third(ly)?|fourth|finally|number (one|two|three)|bullet|step (one|two|three)|next point|"
+            + "(two|three|four|five) things|tag [a-z]+|"
+            + "squared|cubed|derivative|integral|square root|"
+            + "kilo|kilos|kilogram|grams|litre|liter|kilometer|kilometre|percent|"
             + "(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million)( |-)?(percent|dollars|rupees|euros|pounds|thousand|million|hundred|o'clock|thirty|fifteen|forty five|am|pm))\\b",
         options: [.caseInsensitive]
     )
