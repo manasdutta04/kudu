@@ -23,6 +23,11 @@ reporting.
 | Microphone | To hear you while you dictate |
 | Accessibility | To notice the dictation key and to type text into other apps |
 
+## The 🌐 / fn key
+When fn is the dictation key, Kudu temporarily sets **System Settings → Keyboard → "Press 🌐 key
+to"** to *Do Nothing*, so tapping fn doesn't open the emoji picker. Your own choice is saved
+and put back when Kudu quits. You can turn this off in Kudu's menu.
+
 ## Optional "Keep microphone warm"
 When enabled, the microphone stays open between dictations so recording starts instantly.
 macOS shows the orange microphone indicator the whole time. Audio captured while idle is

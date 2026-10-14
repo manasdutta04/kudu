@@ -24,6 +24,11 @@ fn up   ─▶ AudioRecorder.stop ─▶ ParakeetEngine.transcribe ─▶ TextPi
 - Another key during the hold means the user is typing a shortcut, so dictation is cancelled.
 - Escape cancels and is swallowed. The fn release after a dictation is also swallowed, so the emoji picker doesn't open.
 - Two quick taps lock hands-free recording.
+- The tap runs on its own thread at the HID level (session level as a fallback).
+- **The emoji picker:** while fn is the dictation key, `FnKeyGuard` (`KuduCore`) sets "Press 🌐 key to" (`com.apple.HIToolbox AppleFnUsageType`) to *Do Nothing*.
+  - It saves the original value first and restores it on quit or on SIGTERM/SIGINT/SIGHUP.
+  - After a crash, the original is restored on the next launch.
+  - If the user changes the setting while Kudu runs, their choice is kept.
 
 ### Audio (`KuduKit/Audio`)
 - `AVAudioEngine` with a tap on the input node, converted to 16 kHz mono with `AVAudioConverter`.
