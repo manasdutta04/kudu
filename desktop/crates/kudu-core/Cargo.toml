@@ -1,0 +1,13 @@
+[package]
+name = "kudu-core"
+description = "Kudu's text pipeline, shortcuts and learning: pure Rust, no platform code"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+regex.workspace = true
+fancy-regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
