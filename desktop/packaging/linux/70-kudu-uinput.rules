@@ -1,0 +1,5 @@
+# Lets members of the "input" group create virtual keyboards, which Kudu uses to paste
+# dictated text on X11 and every Wayland compositor.
+# Install: sudo cp 70-kudu-uinput.rules /etc/udev/rules.d/ && sudo udevadm control --reload-rules && sudo udevadm trigger
+# (Kudu also reads keyboards through /dev/input, which needs: sudo usermod -aG input $USER)
+KERNEL=="uinput", GROUP="input", MODE="0660", OPTIONS+="static_node=uinput"

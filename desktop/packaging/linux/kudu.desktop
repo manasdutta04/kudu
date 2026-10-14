@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Kudu
+GenericName=Voice Dictation
+Comment=Hold a shortcut, speak, release: your words are typed into any app
+Exec=kudu
+Icon=kudu
+Terminal=false
+Categories=Utility;Accessibility;
+Keywords=dictation;speech;voice;transcription;speech-to-text;
+StartupNotify=false
