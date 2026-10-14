@@ -16,8 +16,8 @@ cloud, no telemetry.
 | Platform | Status | Folder |
 |---|---|---|
 | macOS 14+ on Apple Silicon (M1 or newer; not Intel) | ✅ Available (early) | [`macos/`](macos) (Swift, SwiftUI, AppKit) |
-| Windows | 🗓 Planned | `windows/` (Rust) |
-| Linux | 🗓 Planned | `linux/` (Rust) |
+| Windows 10/11 | 🧪 Beta: builds in CI, being tested | [`desktop/`](desktop) (Rust) |
+| Linux (X11 and Wayland) | 🧪 Beta: builds in CI, being tested | [`desktop/`](desktop) (Rust) |
 
 ## Features
 - **A real Mac app:** a Dock icon, a Home dashboard with your words, speed, streak and full

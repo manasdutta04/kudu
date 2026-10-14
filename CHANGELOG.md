@@ -3,6 +3,20 @@
 All notable changes to Kudu are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com) and the project uses [Semantic Versioning](https://semver.org).
 
+## [Unreleased] - Windows and Linux
+### Added
+- **Kudu for Windows and Linux** (`desktop/`, Rust), in beta. The same text cleanup, styles,
+  dictionary, snippets, learning and shortcuts as the Mac app, from a shared core.
+- Speech on the CPU: Parakeet (Accurate, 482 MB download) or Moonshine (Compact, 251 MB).
+  Finished phrases are transcribed at pauses while you speak, so release-to-text stays short.
+- Optional smart formatting and Command mode with a small local model: Qwen2.5 0.5B (491 MB)
+  or 1.5B (1.1 GB).
+- Windows: low-level keyboard hook (Ctrl + Win to dictate by default, without opening the
+  Start menu), paste that stays out of clipboard history, UI Automation, overlay pill, tray.
+- Linux: X11 and Wayland through evdev and uinput, AT-SPI, a layer-shell or X11 overlay pill,
+  and a StatusNotifierItem tray.
+- A settings window with Home, Insights, Dictionary, Snippets, Style and Settings.
+
 ## [0.8.0] - 2026-10-14
 ### Added
 - **Customizable shortcuts.** Settings → Shortcuts: click Change and press the keys you want

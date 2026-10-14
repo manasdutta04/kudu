@@ -35,6 +35,19 @@ Kudu connects to the internet once, to download the speech model on first launch
 that it works fully offline. There is no account, no analytics, no telemetry and no crash
 reporting.
 
+## Windows and Linux
+The same rules apply to Kudu for Windows and Linux: audio, transcripts and history stay on the
+PC. Files live in `%APPDATA%\Kudu` and `%LOCALAPPDATA%\Kudu` on Windows, and in
+`~/.config/kudu` and `~/.local/share/kudu` on Linux.
+- The network is used only to download the speech model you choose and, if you want it, the
+  small language model for smart formatting.
+- On Windows, dictated text is pasted through the clipboard with markers that keep it out of
+  clipboard history and cloud sync, and your previous clipboard is put back.
+- On Linux, Kudu reads key presses from `/dev/input` only to notice its shortcuts; keys are
+  never recorded or stored. It types through a virtual keyboard (`/dev/uinput`).
+- Reading the text field (to learn from corrections) and the window's names (to spell them)
+  uses UI Automation on Windows and AT-SPI on Linux, with the same limits as on the Mac.
+
 ## Permissions
 | Permission | Why |
 |---|---|

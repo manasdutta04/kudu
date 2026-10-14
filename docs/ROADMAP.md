@@ -48,6 +48,15 @@
 - [ ] Notarized DMG, Sparkle auto-updates, Homebrew cask
 - [ ] Published latency and accuracy benchmarks
 
+## Windows and Linux (Rust, `desktop/`)
+- [x] Shared core: the same text pipeline, shortcuts and learning as the Mac app
+- [x] Speech on the CPU (Parakeet or Moonshine via sherpa-onnx), transcribed at pauses while you speak
+- [x] Optional small language model (Qwen2.5 0.5B / 1.5B via llama.cpp) for smart formatting and Command mode
+- [x] Windows: keyboard hook, clipboard paste that stays out of clipboard history, UI Automation, overlay, tray
+- [x] Linux: evdev + uinput (X11 and Wayland), AT-SPI, layer-shell / X11 overlay, tray
+- [x] Settings window: Home, Insights, Dictionary, Snippets, Style, Settings
+- [ ] Installers: MSI / winget, AppImage / Flatpak
+- [ ] Use Windows' built-in on-device model on Copilot+ PCs
+
 ## Later
-- [ ] Windows and Linux (Rust)
 - [ ] More languages
