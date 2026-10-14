@@ -13,15 +13,33 @@ struct MenuContent: View {
                 StatusBadge(controller: controller)
             }
 
-            if !controller.lastTranscript.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(controller.lastTranscript)
+            if let last = controller.history.first {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(last.text)
                         .font(.callout)
                         .lineLimit(4)
                         .textSelection(.enabled)
-                    if let latency = controller.lastLatencyMs {
-                        Text("\(latency) ms after release").font(.caption).foregroundStyle(.secondary)
+                    HStack {
+                        Text("\(last.latencyMs) ms after release").font(.caption).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Copy") { controller.copyToClipboard(last) }
+                        Button("Copy raw") { controller.copyToClipboard(last, raw: true) }
+                            .help("The transcript before cleanup")
                     }
+                    .controlSize(.small)
+                }
+                if controller.history.count > 1 {
+                    DisclosureGroup("Recent (\(controller.history.count - 1))") {
+                        ForEach(controller.history.dropFirst()) { item in
+                            Button { controller.copyToClipboard(item) } label: {
+                                Text(item.text).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .buttonStyle(.plain)
+                            .help("Click to copy")
+                        }
+                        Button("Clear history") { controller.clearHistory() }.controlSize(.small)
+                    }
+                    .font(.callout)
                 }
             } else {
                 Text("Hold \(controller.trigger.displayName), speak, release.")

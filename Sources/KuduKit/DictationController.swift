@@ -19,6 +19,9 @@ public final class DictationController: ObservableObject {
     /// Key-up → text inserted, in milliseconds, for the most recent dictation.
     @Published public private(set) var lastLatencyMs: Int?
     @Published public private(set) var hotkeyActive = false
+    /// Most recent first, capped at `historyLimit`.
+    @Published public private(set) var history: [HistoryItem] = []
+    public var historyLimit = 25
 
     @Published public var trigger: TriggerKey {
         didSet {
@@ -109,6 +112,24 @@ public final class DictationController: ObservableObject {
         }
     }
 
+    // MARK: - History
+
+    /// Types a previous result at the cursor again (e.g. after it went to the wrong window).
+    public func reinsert(_ item: HistoryItem, raw: Bool = false) {
+        Task { await inserter.insert(raw ? item.raw : item.text) }
+    }
+
+    public func copyToClipboard(_ item: HistoryItem, raw: Bool = false) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(raw ? item.raw : item.text, forType: .string)
+    }
+
+    public func clearHistory() {
+        history.removeAll()
+        lastTranscript = ""
+        lastLatencyMs = nil
+    }
+
     // MARK: - Hotkey flow
 
     private func handle(_ event: HotkeyEvent) {
@@ -185,7 +206,12 @@ public final class DictationController: ObservableObject {
                     self.log.debug("Inserted via \(method.rawValue)")
                 }
                 self.lastTranscript = text
-                self.lastLatencyMs = Int((ContinuousClock.now - releasedAt) / .milliseconds(1))
+                let latency = Int((ContinuousClock.now - releasedAt) / .milliseconds(1))
+                self.lastLatencyMs = latency
+                if !text.isEmpty {
+                    self.history.insert(HistoryItem(date: .now, raw: raw, text: text, latencyMs: latency), at: 0)
+                    if self.history.count > self.historyLimit { self.history.removeLast() }
+                }
                 let audioSeconds = Double(samples.count) / AudioRecorder.sampleRate
                 self.log.info(
                     "Dictation: \(audioSeconds, format: .fixed(precision: 1))s audio → \(self.lastLatencyMs ?? 0) ms"
