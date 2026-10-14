@@ -60,6 +60,10 @@ struct MenuContent: View {
             Divider()
 
             HStack {
+                Button("Settings…") {
+                    NSApp.activate(ignoringOtherApps: true)
+                    openWindow(id: "settings")
+                }
                 Button("Setup…") {
                     NSApp.activate(ignoringOtherApps: true)
                     openWindow(id: "onboarding")

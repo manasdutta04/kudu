@@ -17,6 +17,11 @@ struct KuduApp: App {
             OnboardingView(controller: appDelegate.controller)
         }
         .windowResizability(.contentSize)
+
+        Window("Kudu Settings", id: "settings") {
+            SettingsView(store: appDelegate.controller.store)
+        }
+        .windowResizability(.contentSize)
     }
 }
 
