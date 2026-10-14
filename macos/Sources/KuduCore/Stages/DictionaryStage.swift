@@ -7,12 +7,17 @@ public struct DictionaryEntry: Codable, Sendable, Hashable, Identifiable {
     public var heard: [String]
     /// How it should be written.
     public var written: String
+    /// Learned automatically from a correction the user made. Nil in older files.
+    public var learned: Bool?
 
-    public init(id: UUID = UUID(), heard: [String], written: String) {
+    public init(id: UUID = UUID(), heard: [String], written: String, learned: Bool = false) {
         self.id = id
         self.heard = heard
         self.written = written
+        self.learned = learned ? true : nil
     }
+
+    public var isLearned: Bool { learned == true }
 }
 
 /// Replaces misheard words with the user's spelling. Also fixes the capitalization of the
@@ -35,6 +40,17 @@ public struct DictionaryStage: TextStage {
                 pattern: "(?<![\\w'])(?:\(alternatives))(?![\\w'])", options: [.caseInsensitive]
             ) else { return nil }
             return (regex, NSRegularExpression.escapedTemplate(for: entry.written))
+        }
+    }
+
+    /// How many words in `text` this dictionary would actually correct (spelling that differs
+    /// from the user's, not words that are already right).
+    public func corrections(in text: String) -> Int {
+        rules.reduce(0) { count, rule in
+            let range = NSRange(text.startIndex..., in: text)
+            return count + rule.0.matches(in: text, range: range).filter { match in
+                Range(match.range, in: text).map { text[$0] != rule.1 } ?? false
+            }.count
         }
     }
 
