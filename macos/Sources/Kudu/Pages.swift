@@ -15,26 +15,67 @@ private final class Draft: ObservableObject {
     }
 }
 
-/// A rounded list card used by the Dictionary and Snippets pages.
-private struct Card<Content: View>: View {
-    @ViewBuilder let content: () -> Content
-
-    var body: some View {
-        VStack(spacing: 0, content: content)
-            .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).strokeBorder(.quaternary))
-    }
-}
-
+/// Scrollable page body with the shared margins.
 private struct PageScroll<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 22, content: content)
-                .padding(36)
+            VStack(alignment: .leading, spacing: 24, content: content)
+                .padding(.horizontal, 40)
+                .padding(.vertical, 42)
                 .frame(maxWidth: 820, alignment: .leading)
                 .frame(maxWidth: .infinity)
+        }
+    }
+}
+
+/// A titled group of rows inside a card, like a grouped settings section.
+private struct Section<Content: View>: View {
+    let title: String
+    var footer: String?
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title.uppercased())
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .tracking(0.8)
+                .padding(.leading, 4)
+            VStack(alignment: .leading, spacing: 0, content: content)
+                .card(radius: 14)
+            if let footer {
+                Text(footer).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 4)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+}
+
+/// One row in a `Section`: a label (with optional detail) and a control.
+private struct Row<Control: View>: View {
+    let title: String
+    var detail: String?
+    var divider = true
+    @ViewBuilder let control: () -> Control
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 16) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.system(size: 13.5))
+                    if let detail {
+                        Text(detail).font(.caption).foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                Spacer(minLength: 12)
+                control()
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            if divider { Divider().overlay(Theme.hairline).padding(.leading, 18) }
         }
     }
 }
@@ -65,13 +106,13 @@ struct DictionaryPage: View {
             .textFieldStyle(.roundedBorder)
 
             if store.dictionary.isEmpty {
-                Text("No words yet.").foregroundStyle(.secondary)
+                EmptyState(symbol: "character.book.closed", text: "No words yet. Add names and terms Kudu gets wrong.")
             } else {
-                Card {
+                VStack(spacing: 0) {
                     ForEach(Array(store.dictionary.enumerated()), id: \.element.id) { index, entry in
-                        if index > 0 { Divider().padding(.leading, 18) }
-                        HStack {
-                            Text(entry.written).fontWeight(.medium)
+                        if index > 0 { Divider().overlay(Theme.hairline).padding(.leading, 18) }
+                        HStack(spacing: 14) {
+                            Text(entry.written).font(.system(size: 13.5, weight: .medium))
                             Text(entry.heard.joined(separator: ", ")).foregroundStyle(.secondary)
                             Spacer()
                             Button(role: .destructive) {
@@ -83,6 +124,7 @@ struct DictionaryPage: View {
                         .padding(.vertical, 12)
                     }
                 }
+                .card(radius: 14)
             }
         }
     }
@@ -113,13 +155,14 @@ struct SnippetsPage: View {
             .textFieldStyle(.roundedBorder)
 
             if store.snippets.isEmpty {
-                Text("No snippets yet.").foregroundStyle(.secondary)
+                EmptyState(symbol: "text.badge.plus", text: "No snippets yet. Try “my email” → your address.")
             } else {
-                Card {
+                VStack(spacing: 0) {
                     ForEach(Array(store.snippets.enumerated()), id: \.element.id) { index, snippet in
-                        if index > 0 { Divider().padding(.leading, 18) }
-                        HStack(alignment: .top) {
-                            Text("“\(snippet.trigger)”").fontWeight(.medium).frame(width: 160, alignment: .leading)
+                        if index > 0 { Divider().overlay(Theme.hairline).padding(.leading, 18) }
+                        HStack(alignment: .top, spacing: 14) {
+                            Text("“\(snippet.trigger)”").font(.system(size: 13.5, weight: .medium))
+                                .frame(width: 170, alignment: .leading)
                             Text(snippet.expansion).foregroundStyle(.secondary).lineLimit(3)
                             Spacer()
                             Button(role: .destructive) {
@@ -131,8 +174,24 @@ struct SnippetsPage: View {
                         .padding(.vertical, 12)
                     }
                 }
+                .card(radius: 14)
             }
         }
+    }
+}
+
+private struct EmptyState: View {
+    let symbol: String
+    let text: String
+
+    var body: some View {
+        VStack(spacing: 10) {
+            Image(systemName: symbol).font(.system(size: 24)).foregroundStyle(.tertiary)
+            Text(text).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 40)
+        .card(radius: 14)
     }
 }
 
@@ -144,45 +203,83 @@ struct StylePage: View {
 
     var body: some View {
         PageScroll {
-            PageHeader(title: "Style", subtitle: "How Kudu turns speech into clean, well-formatted text.")
+            PageHeader(title: "Style", subtitle: "How Kudu turns what you say into clean, well-formatted text.")
 
-            Form {
-                Section {
+            Section(title: "Editing", footer: editingFooter) {
+                VStack(alignment: .leading, spacing: 10) {
                     Picker("Editing", selection: $store.cleanup.editingStrength) {
                         ForEach(EditingStrength.allCases) { Text($0.title).tag($0) }
                     }
                     .pickerStyle(.segmented)
-                    .disabled(!controller.smartFormattingAvailable)
-                    Text(formattingNote)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                } header: {
-                    Text("Formatting")
+                    .labelsHidden()
+                    Text(store.cleanup.editingStrength.summary).font(.callout).foregroundStyle(.secondary)
                 }
+                .padding(18)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
-                Section {
-                    Toggle("Remove filler words (um, uh)", isOn: $store.cleanup.removeFillers)
-                    Toggle("Apply spoken corrections (\"Tuesday, no, Wednesday\")", isOn: $store.cleanup.applySelfCorrections)
-                    Toggle("\"New line\" and \"new paragraph\" commands", isOn: $store.cleanup.spokenCommands)
-                    Toggle("Write times as 10:30", isOn: $store.cleanup.normalizeTimes)
-                } header: {
-                    Text("Cleanup")
-                } footer: {
-                    Text("Cleanup rules run instantly on every dictation.").font(.caption).foregroundStyle(.secondary)
+            Section(title: "Style by app", footer: "Kudu picks the style from the app you're typing in.") {
+                StyleRow(title: "Personal messages", apps: "Messages, WhatsApp, Telegram", style: $store.cleanup.styles.personalMessages)
+                StyleRow(title: "Work messages", apps: "Slack, Teams, Discord", style: $store.cleanup.styles.workMessages)
+                StyleRow(title: "Email", apps: "Mail, Outlook", style: $store.cleanup.styles.email)
+                StyleRow(title: "Everything else", apps: "Notes, docs, browsers", style: $store.cleanup.styles.other, divider: false)
+            }
+
+            Section(title: "Cleanup", footer: "These rules run instantly on every dictation.") {
+                Row(title: "Remove filler words", detail: "um, uh, erm") {
+                    Toggle("", isOn: $store.cleanup.removeFillers).labelsHidden().toggleStyle(.switch)
+                }
+                Row(title: "Apply spoken corrections", detail: "“Tuesday, no, Wednesday” → “Wednesday”") {
+                    Toggle("", isOn: $store.cleanup.applySelfCorrections).labelsHidden().toggleStyle(.switch)
+                }
+                Row(title: "Line break commands", detail: "Say “new line” or “new paragraph”") {
+                    Toggle("", isOn: $store.cleanup.spokenCommands).labelsHidden().toggleStyle(.switch)
+                }
+                Row(title: "Write times as 10:30", divider: false) {
+                    Toggle("", isOn: $store.cleanup.normalizeTimes).labelsHidden().toggleStyle(.switch)
                 }
             }
-            .formStyle(.grouped)
-            .scrollDisabled(true)
-            .frame(minHeight: 380)
         }
     }
 
-    private var formattingNote: String {
-        guard controller.smartFormattingAvailable else {
-            return "Needs macOS 26 or later with Apple Intelligence turned on. Kudu uses the rule cleanup below instead."
+    private var editingFooter: String {
+        controller.smartFormattingAvailable
+            ? "Lists, numbers and long passages are formatted by Apple's on-device model while you speak, so text still lands almost instantly. Nothing leaves your Mac."
+            : "Smart formatting needs macOS 26 or later with Apple Intelligence; until then Kudu uses its instant cleanup rules."
+    }
+}
+
+private struct StyleRow: View {
+    let title: String
+    let apps: String
+    @Binding var style: WritingStyle
+    var divider = true
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(alignment: .center, spacing: 16) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title).font(.system(size: 13.5, weight: .medium))
+                    Text(apps).font(.caption).foregroundStyle(.secondary)
+                }
+                .frame(width: 170, alignment: .leading)
+                Text(style.example)
+                    .font(.system(size: 12.5))
+                    .italic()
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                Spacer(minLength: 12)
+                Picker("", selection: $style) {
+                    ForEach(WritingStyle.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 250)
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            if divider { Divider().overlay(Theme.hairline).padding(.leading, 18) }
         }
-        return "Uses Apple's on-device model to add punctuation, paragraphs, lists and written numbers, without changing your words. Short phrases stay instant. Nothing leaves your Mac."
     }
 }
 
@@ -201,62 +298,86 @@ struct SettingsPage: View {
 
     var body: some View {
         PageScroll {
-            PageHeader(title: "Settings", subtitle: "Keys, sounds, microphone and privacy.")
+            PageHeader(title: "Settings", subtitle: "Keys, sounds, privacy and Command mode.")
 
-            Form {
-                Section("Dictation") {
-                    Picker("Dictation key", selection: $controller.trigger) {
+            Section(title: "Dictation") {
+                Row(title: "Dictation key") {
+                    Picker("", selection: $controller.trigger) {
                         ForEach(TriggerKey.allCases) { Text($0.displayName).tag($0) }
                     }
-                    Picker("Recording", selection: $controller.recordingMode) {
+                    .labelsHidden().frame(width: 220)
+                }
+                Row(title: "Recording", detail: controller.recordingMode.hint(for: controller.trigger)) {
+                    Picker("", selection: $controller.recordingMode) {
                         ForEach(RecordingMode.allCases) { Text($0.title).tag($0) }
                     }
-                    if controller.trigger == .fn {
-                        Toggle("Stop fn from opening the emoji picker", isOn: $controller.preventEmojiPicker)
-                    }
+                    .labelsHidden().frame(width: 260)
                 }
-
-                Section("Feedback & microphone") {
-                    Toggle("Sounds", isOn: $controller.soundsEnabled)
-                    Text("The microphone is on only while you dictate. Audio is held in memory and never saved.")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-
-                Section("General") {
-                    Toggle("Open Kudu at login", isOn: Binding(get: { launchAtLogin.isEnabled }, set: { launchAtLogin.set($0) }))
-                }
-
-                Section("History") {
-                    Picker("Keep history", selection: $history.retention) {
-                        ForEach(HistoryRetention.allCases) { Text($0.title).tag($0) }
+                if controller.trigger == .fn {
+                    Row(title: "Stop fn from opening the emoji picker", detail: "Only while Kudu is running.", divider: false) {
+                        Toggle("", isOn: $controller.preventEmojiPicker).labelsHidden().toggleStyle(.switch)
                     }
-                    HStack {
-                        Text("\(history.records.count) dictations saved on this Mac")
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Button("Clear history…", role: .destructive) { confirm.clearHistory = true }
-                            .disabled(history.records.isEmpty)
-                    }
-                }
-
-                Section("Permissions") {
-                    PermissionRow(title: "Microphone", granted: Permissions.microphoneGranted) {
-                        Permissions.openSettings(.microphone)
-                    }
-                    PermissionRow(title: "Accessibility", granted: Permissions.accessibilityGranted) {
-                        Permissions.openSettings(.accessibility)
-                    }
-                }
-
-                Section("About") {
-                    LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "–")
-                    LabeledContent("Speech model", value: "NVIDIA Parakeet TDT 0.6B v2 (on device)")
-                    LabeledContent("Formatting", value: controller.smartFormattingAvailable ? "Apple on-device model" : "Rules only")
                 }
             }
-            .formStyle(.grouped)
-            .scrollDisabled(true)
-            .frame(minHeight: 820)
+
+            Section(title: "Command mode") {
+                Row(
+                    title: "Select text, hold fn + ⌃ and say what to do",
+                    detail: "“Make this more formal” · “Translate to Hindi” · “Fix the grammar” · “Summarize”. With nothing selected, Kudu writes it: “Write a polite reply saying I'll be late.”",
+                    divider: false
+                ) {
+                    if controller.commandModeAvailable {
+                        Label("On device", systemImage: "sparkle").font(.caption).foregroundStyle(Theme.accent)
+                    } else {
+                        Text("Needs Apple Intelligence").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            Section(title: "General") {
+                Row(title: "Sounds") {
+                    Toggle("", isOn: $controller.soundsEnabled).labelsHidden().toggleStyle(.switch)
+                }
+                Row(title: "Open Kudu at login", divider: false) {
+                    Toggle("", isOn: Binding(get: { launchAtLogin.isEnabled }, set: { launchAtLogin.set($0) }))
+                        .labelsHidden().toggleStyle(.switch)
+                }
+            }
+
+            Section(title: "Privacy", footer: "The microphone is on only while you dictate. Audio is never saved; history stays on this Mac.") {
+                Row(title: "Keep history") {
+                    Picker("", selection: $history.retention) {
+                        ForEach(HistoryRetention.allCases) { Text($0.title).tag($0) }
+                    }
+                    .labelsHidden().frame(width: 140)
+                }
+                Row(title: "\(history.records.count) dictations saved", divider: false) {
+                    Button("Clear history…", role: .destructive) { confirm.clearHistory = true }
+                        .disabled(history.records.isEmpty)
+                }
+            }
+
+            Section(title: "Permissions") {
+                PermissionRow(title: "Microphone", granted: Permissions.microphoneGranted) {
+                    Permissions.openSettings(.microphone)
+                }
+                PermissionRow(title: "Accessibility", granted: Permissions.accessibilityGranted, divider: false) {
+                    Permissions.openSettings(.accessibility)
+                }
+            }
+
+            Section(title: "About") {
+                Row(title: "Version") {
+                    Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "–")
+                        .foregroundStyle(.secondary)
+                }
+                Row(title: "Speech model") {
+                    Text("NVIDIA Parakeet TDT 0.6B v2, on device").foregroundStyle(.secondary)
+                }
+                Row(title: "Formatting & commands", divider: false) {
+                    Text(controller.smartFormattingAvailable ? "Apple on-device model" : "Rules only").foregroundStyle(.secondary)
+                }
+            }
         }
         .confirmationDialog("Clear all dictation history?", isPresented: $confirm.clearHistory) {
             Button("Clear history", role: .destructive) { history.clear() }
@@ -269,12 +390,11 @@ struct SettingsPage: View {
 private struct PermissionRow: View {
     let title: String
     let granted: Bool
+    var divider = true
     let open: () -> Void
 
     var body: some View {
-        HStack {
-            Text(title)
-            Spacer()
+        Row(title: title, divider: divider) {
             if granted {
                 Label("Allowed", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
             } else {

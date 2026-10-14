@@ -31,33 +31,43 @@ enum Page: String, CaseIterable, Identifiable {
 /// newer SDKs and the Command Line Tools ship without the SwiftUI macro plugin.
 @MainActor
 final class Navigation: ObservableObject {
-    @Published var page: Page? = .home
+    @Published var page: Page
+
+    init(page: Page = .home) {
+        self.page = page
+    }
 }
 
+/// The main window: a quiet sidebar on the window background, and the current page on a
+/// rounded panel. The title bar is hidden; the traffic lights sit over the sidebar.
 struct MainWindow: View {
     @ObservedObject var controller: DictationController
-    @StateObject private var navigation = Navigation()
+    @StateObject private var navigation: Navigation
+
+    init(controller: DictationController, page: Page = .home) {
+        self.controller = controller
+        _navigation = StateObject(wrappedValue: Navigation(page: page))
+    }
 
     var body: some View {
-        NavigationSplitView {
-            List(selection: $navigation.page) {
-                ForEach(Page.allCases) { page in
-                    Label(page.title, systemImage: page.symbol).tag(page)
-                }
-            }
-            .safeAreaInset(edge: .top) { Brand().padding(.horizontal, 18).padding(.vertical, 10) }
-            .safeAreaInset(edge: .bottom) { SidebarStatus(controller: controller).padding(12) }
-            .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 260)
-        } detail: {
+        HStack(spacing: 0) {
+            Sidebar(controller: controller, navigation: navigation)
+                .frame(width: 228)
             detail
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .background(Color(nsColor: .windowBackgroundColor))
+                .background(Theme.panel, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.hairline))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .padding(.vertical, 10)
+                .padding(.trailing, 10)
         }
-        .frame(minWidth: 860, minHeight: 580)
+        .background(Theme.canvas)
+        .ignoresSafeArea()
+        .frame(minWidth: 900, minHeight: 600)
     }
 
     @ViewBuilder private var detail: some View {
-        switch navigation.page ?? .home {
+        switch navigation.page {
         case .home: HomeView(controller: controller, history: controller.history)
         case .dictionary: DictionaryPage(store: controller.store)
         case .snippets: SnippetsPage(store: controller.store)
@@ -67,37 +77,76 @@ struct MainWindow: View {
     }
 }
 
-private struct Brand: View {
+private struct Sidebar: View {
+    @ObservedObject var controller: DictationController
+    @ObservedObject var navigation: Navigation
+
     var body: some View {
-        HStack(spacing: 10) {
-            Image(nsImage: KuduMark.image(size: NSSize(width: 26, height: 26), template: true))
-                .foregroundStyle(.primary)
-            Text("Kudu").font(.system(size: 20, weight: .semibold, design: .rounded))
+        VStack(alignment: .leading, spacing: 2) {
+            HStack(spacing: 9) {
+                Image(nsImage: KuduMark.image(size: NSSize(width: 24, height: 24), template: true))
+                    .foregroundStyle(.primary)
+                Text("Kudu").font(.system(size: 19, weight: .semibold, design: .rounded))
+            }
+            .padding(.horizontal, 10)
+            .padding(.top, 50) // room for the traffic lights
+            .padding(.bottom, 18)
+
+            ForEach(Page.allCases) { page in
+                SidebarItem(page: page, selected: navigation.page == page) { navigation.page = page }
+            }
+
             Spacer()
+
+            SidebarStatus(controller: controller) { navigation.page = .home }
         }
+        .padding(.horizontal, 12)
+        .padding(.bottom, 14)
+    }
+}
+
+private struct SidebarItem: View {
+    let page: Page
+    let selected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Image(systemName: page.symbol)
+                    .font(.system(size: 13.5))
+                    .frame(width: 20)
+                    .foregroundStyle(selected ? .primary : .secondary)
+                Text(page.title)
+                    .font(.system(size: 13.5, weight: selected ? .semibold : .regular))
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(selected ? Theme.selection : .clear, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
 /// Bottom of the sidebar: is Kudu ready to dictate, and what to do if not.
 private struct SidebarStatus: View {
     @ObservedObject var controller: DictationController
-    @Environment(\.openWindow) private var openWindow
+    let showSetup: () -> Void
 
     var body: some View {
         HStack(spacing: 8) {
             Circle().fill(color).frame(width: 7, height: 7)
-            Text(message).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+            Text(message).font(.system(size: 11.5)).foregroundStyle(.secondary).lineLimit(2)
             Spacer(minLength: 0)
             if !isReady {
-                Button("Fix") {
-                    NSApp.activate(ignoringOtherApps: true)
-                    openWindow(id: WindowID.onboarding)
-                }
-                .controlSize(.small)
+                Button("Set up", action: showSetup).controlSize(.small)
             }
         }
-        .padding(10)
-        .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 10))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(Theme.selection.opacity(0.6), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     private var isReady: Bool { controller.modelState == .ready && controller.hotkeyActive }
@@ -126,9 +175,9 @@ struct PageHeader: View {
     let subtitle: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.system(size: 26, weight: .semibold))
-            Text(subtitle).font(.callout).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(Theme.display(30))
+            Text(subtitle).font(.system(size: 13.5)).foregroundStyle(.secondary)
         }
     }
 }

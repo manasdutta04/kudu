@@ -9,7 +9,8 @@ struct KuduApp: App {
         Window("Kudu", id: WindowID.main) {
             MainWindow(controller: appDelegate.controller)
         }
-        .defaultSize(width: 1040, height: 700)
+        .windowStyle(.hiddenTitleBar)
+        .defaultSize(width: 1080, height: 720)
 
         MenuBarExtra {
             MenuContent(controller: appDelegate.controller, history: appDelegate.controller.history)
@@ -17,17 +18,11 @@ struct KuduApp: App {
             MenuBarLabel(controller: appDelegate.controller)
         }
         .menuBarExtraStyle(.window)
-
-        Window("Welcome to Kudu", id: WindowID.onboarding) {
-            OnboardingView(controller: appDelegate.controller)
-        }
-        .windowResizability(.contentSize)
     }
 }
 
 enum WindowID {
     static let main = "main"
-    static let onboarding = "onboarding"
 }
 
 @MainActor
@@ -41,11 +36,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         controller.activate()
         if CommandLine.arguments.contains("--overlay-demo") {
             controller.runOverlayDemo()
-            return
         }
-        if !Permissions.accessibilityGranted || !Permissions.microphoneGranted || controller.modelState == .missing {
-            Windows.open(WindowID.onboarding)
-        }
+        // Setup, if anything is missing, lives on the Home page of the main window.
     }
 
     /// Kudu keeps listening for the dictation key after its window is closed.

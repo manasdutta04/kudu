@@ -19,6 +19,15 @@ public enum TriggerKey: String, CaseIterable, Sendable, Codable, Identifiable {
         }
     }
 
+    /// Compact label for key hints ("Hold fn").
+    public var shortName: String {
+        switch self {
+        case .fn: "fn"
+        case .rightCommand: "Right ⌘"
+        case .rightOption: "Right ⌥"
+        }
+    }
+
     var keyCode: Int64 {
         switch self {
         case .fn: 63          // kVK_Function
