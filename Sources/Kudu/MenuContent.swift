@@ -43,7 +43,7 @@ struct MenuContent: View {
                     .font(.callout)
                 }
             } else {
-                Text("Hold \(controller.trigger.displayName), speak, release.")
+                Text(controller.recordingMode.hint(for: controller.trigger))
                     .font(.callout).foregroundStyle(.secondary)
             }
 
@@ -51,6 +51,9 @@ struct MenuContent: View {
 
             Picker("Dictation key", selection: $controller.trigger) {
                 ForEach(TriggerKey.allCases) { key in Text(key.displayName).tag(key) }
+            }
+            Picker("Recording", selection: $controller.recordingMode) {
+                ForEach(RecordingMode.allCases) { mode in Text(mode.title).tag(mode) }
             }
             Toggle("Sounds", isOn: $controller.soundsEnabled)
             Toggle("Keep microphone warm", isOn: $controller.keepMicWarm)

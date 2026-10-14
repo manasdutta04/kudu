@@ -31,6 +31,9 @@ public final class DictationController: ObservableObject {
             UserDefaults.standard.set(trigger.rawValue, forKey: Keys.trigger)
         }
     }
+    @Published public var recordingMode: RecordingMode {
+        didSet { UserDefaults.standard.set(recordingMode.rawValue, forKey: Keys.recordingMode) }
+    }
     @Published public var soundsEnabled: Bool {
         didSet {
             sounds.isEnabled = soundsEnabled
@@ -67,6 +70,7 @@ public final class DictationController: ObservableObject {
         static let trigger = "triggerKey"
         static let keepMicWarm = "keepMicWarm"
         static let soundsEnabled = "soundsEnabled"
+        static let recordingMode = "recordingMode"
     }
 
     public init(store: UserDataStore = UserDataStore()) {
@@ -75,6 +79,8 @@ public final class DictationController: ObservableObject {
         let trigger = defaults.string(forKey: Keys.trigger).flatMap(TriggerKey.init(rawValue:)) ?? .fn
         self.trigger = trigger
         self.keepMicWarm = defaults.bool(forKey: Keys.keepMicWarm)
+        self.recordingMode = defaults.string(forKey: Keys.recordingMode)
+            .flatMap(RecordingMode.init(rawValue:)) ?? .holdOrDoubleTap
         self.soundsEnabled = defaults.object(forKey: Keys.soundsEnabled) as? Bool ?? true
         self.hotkey = HotkeyMonitor(trigger: trigger)
         sounds.isEnabled = soundsEnabled
@@ -103,8 +109,8 @@ public final class DictationController: ObservableObject {
         if case .downloading = modelState { return }
         modelState = .downloading(0)
         do {
-            try await ParakeetEngine.download { fraction in
-                Task { @MainActor [weak self] in
+            try await ParakeetEngine.download { [weak self] fraction in
+                Task { @MainActor in
                     guard let self, case .downloading = self.modelState else { return }
                     self.modelState = .downloading(fraction)
                 }
@@ -171,7 +177,8 @@ public final class DictationController: ObservableObject {
         }
     }
 
-    /// A normal hold finishes on release. Two quick taps lock recording hands-free.
+    /// A long hold always finishes on release (push-to-talk). What a short tap does depends
+    /// on the recording mode: lock hands-free right away, lock on the second tap, or nothing.
     private func handleRelease() {
         guard isRecording, let started = recordingStartedAt else { return }
         let now = ContinuousClock.now
@@ -179,14 +186,25 @@ public final class DictationController: ObservableObject {
             finishRecording()
             return
         }
-        if let lastTap = lastShortTapAt, now - lastTap < doubleTapWindow {
-            lastShortTapAt = nil
-            isHandsFree = true
-            overlay.model.isLocked = true
-            return
+        switch recordingMode {
+        case .tapToToggle:
+            lockHandsFree()
+        case .holdOrDoubleTap:
+            if let lastTap = lastShortTapAt, now - lastTap < doubleTapWindow {
+                lastShortTapAt = nil
+                lockHandsFree()
+            } else {
+                lastShortTapAt = now
+                finishRecording()
+            }
+        case .holdOnly:
+            finishRecording()
         }
-        lastShortTapAt = now
-        finishRecording()
+    }
+
+    private func lockHandsFree() {
+        isHandsFree = true
+        overlay.model.isLocked = true
     }
 
     private func beginRecording() {
