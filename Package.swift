@@ -6,6 +6,7 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [
         .executable(name: "Kudu", targets: ["Kudu"]),
+        .executable(name: "kudu-bench", targets: ["KuduBench"]),
     ],
     dependencies: [
         // Parakeet ASR + Silero VAD on the Neural Engine. Apache-2.0.
@@ -29,6 +30,8 @@ let package = Package(
             dependencies: ["KuduKit"],
             exclude: ["Info.plist", "Kudu.entitlements"]
         ),
+        // Command-line latency/accuracy harness over WAV files.
+        .executableTarget(name: "KuduBench", dependencies: ["KuduKit"]),
         .testTarget(name: "KuduCoreTests", dependencies: ["KuduCore"]),
     ]
 )
