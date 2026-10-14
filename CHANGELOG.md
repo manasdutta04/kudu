@@ -3,6 +3,21 @@
 All notable changes to Kudu are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com) and the project uses [Semantic Versioning](https://semver.org).
 
+## [0.6.0] - 2026-10-14
+### Added
+- **Formats like a native writer in every app.** Spoken lists become bullets under a heading,
+  units and times become digits ("2 kg", "8pm"), math becomes notation ("x² sin x"),
+  "tag Priya" becomes @Priya in chat apps, and to-do apps get one item per line.
+- **Code editors and terminals:** spoken symbols become symbols, identifiers are written the
+  way code writes them (userService.ts, getUser), and commands come out exact.
+- **Spells names the way they appear on screen.** When you start dictating, Kudu reads the
+  names and terms in the window you're in (locally, nothing stored) and fixes words the speech
+  model misheard (Sidarth → Siddharth, github → GitHub).
+
+### Changed
+- "No wait" and "or rather" corrections work without pauses; emails are always laid out with
+  greeting and sign-off.
+
 ## [0.5.0] - 2026-10-14
 ### Added
 - **Learns from your corrections.** Fix a name or term Kudu misspelled, right after dictating,

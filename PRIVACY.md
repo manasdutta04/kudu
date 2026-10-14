@@ -21,6 +21,10 @@ Kudu is built so that what you say stays on your Mac.
 - **Learning from corrections:** after a dictation Kudu reads the text field it typed into, for
   up to 45 seconds and only until you move elsewhere, to notice if you fix a word it got wrong.
   Only the corrected word is saved, to your dictionary. You can turn this off in Settings.
+- **Screen context:** when you start dictating, Kudu reads the visible text of the window you
+  are in through Accessibility (for at most 150 ms) and keeps only names and terms, in memory,
+  so it can spell them the way they appear. Nothing is saved, and it's discarded after the
+  dictation.
 - **Settings, dictionary and snippets** are saved as JSON files in the same folder.
 
 ## Network access

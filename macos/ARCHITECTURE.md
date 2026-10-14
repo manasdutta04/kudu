@@ -91,6 +91,11 @@ fn up   ─▶ AudioRecorder.stop ─▶ final transcription ─▶ reuse format
 - History is pruned to the retention setting (90 days by default).
 - `UsageStats` derives total words, words per minute (dictations of 1.5 s or longer) and the day streak for the Home page.
 
+### Screen context (`KuduKit/Context`, `KuduCore/TermExtractor`)
+1. **Read.** When recording starts, `ScreenContext` walks the focused window through Accessibility off the main thread (at most 150 ms and 400 elements) and collects its visible text.
+2. **Extract.** `TermExtractor` keeps names, @handles and code identifiers (top 40). They are passed to the formatter as spelling hints.
+3. **Respell.** After transcription, `ScreenSpeller` replaces a word with an on-screen term when the casing differs only (github → GitHub), or when the system spell checker doesn't know the word and it sounds like the term (Sidarth → Siddharth). Real words are never touched. Nothing is stored.
+
 ### Learning from corrections (`KuduKit/Learning`, `KuduCore/CorrectionLearner`)
 1. **Snapshot.** After inserting text, `EditObserver` snapshots the field through Accessibility and finds the inserted text by the unchanged text around it.
 2. **Watch.** It polls every 1.5 s for up to 45 s, and stops when focus moves or the text around it changes.

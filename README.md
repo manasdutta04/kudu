@@ -54,6 +54,7 @@ See the [roadmap](docs/ROADMAP.md) for what's next.
 | Speech → text | NVIDIA **Parakeet TDT 0.6B v2** on the Apple Neural Engine, through FluidAudio |
 | Formatting and Command mode | Apple's on-device **Foundation Models** (the ~3B model behind Apple Intelligence, macOS 26+) |
 | Cleanup, styles, dictionary, learning | Fast deterministic rules, written in Swift |
+| Names and terms on screen | Accessibility + the system spell checker, to spell what you said the way it appears |
 
 There are no servers, no accounts and no API keys. After the one-time model download, Kudu
 works offline.
