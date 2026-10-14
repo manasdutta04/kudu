@@ -3,6 +3,26 @@
 All notable changes to Kudu are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com) and the project uses [Semantic Versioning](https://semver.org).
 
+## [0.4.0] - 2026-10-14
+### Added
+- **Command mode (fn + ⌃).** Select text, hold fn and Control, and say what to do: "make
+  this more formal", "translate to Hindi", "fix the grammar", "summarize". With nothing
+  selected Kudu drafts it ("write a polite reply saying I'll be late"). On-device.
+- **Formatting while you speak.** Recognition and formatting run during the dictation, so
+  text lands about 100–700 ms after release, even for long dictations.
+- **Styles per app:** Formal, Casual or Very casual for personal messages, work messages,
+  email and everything else.
+- **Editing strength:** Verbatim, Light or Polished.
+- Letter layout for "Dear …" greetings and "Best regards, …" sign-offs.
+- The text before the cursor is used as context for formatting.
+
+### Changed
+- A redesigned main window: quiet sidebar, rounded content panel, serif display type.
+  Setup now lives on the Home page, and the Welcome window no longer opens on every launch.
+- The start sound plays when the microphone is actually live, so the first word isn't lost.
+- The language model is used only where it adds structure (lists, numbers in words, long
+  passages); plain sentences are finished instantly by rules.
+
 ## [0.3.1] - 2026-10-14
 ### Changed
 - The microphone is open only while you dictate. Removed the one-minute warm period after

@@ -1,6 +1,12 @@
 # Roadmap
 
-## v0.3 (current)
+## v0.4 (current)
+- [x] Command mode on fn + ⌃: edit the selection or draft new text, on device
+- [x] Formatting while you speak: ~100–700 ms from release to text
+- [x] Styles per app category and editing strength
+- [x] Redesigned window; setup inside the app
+
+## v0.3
 - [x] Desktop app: Dock icon, main window with Home dashboard (words, words per minute, streak, history), Dictionary, Snippets, Style, Settings
 - [x] Kudu logo as the app icon and an animated menu-bar icon
 - [x] Smart formatting with Apple's on-device model: punctuation, paragraphs, lists, written numbers
@@ -28,9 +34,8 @@
 - [ ] Optionally pause media playback while dictating
 
 ## v0.5: on-device intelligence (macOS 26+)
-- [ ] Per-app tone presets on top of smart formatting
-- [ ] Select text, hold fn+⌃ and say what to do with it ("make this more formal", "reply yes")
-- [ ] Context from the focused app (name, page URL, text around the cursor), never leaving the Mac
+- [ ] Context from the page URL and more of the focused document
+- [ ] Spoken "press enter" and other editing commands
 
 ## v0.6: learning
 - [ ] Notice corrections made right after a dictation and suggest dictionary entries

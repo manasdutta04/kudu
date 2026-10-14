@@ -6,7 +6,7 @@ cloud, no telemetry.
 
 | | |
 |---|---|
-| ⚡ **Fast** | Text lands ~130–150 ms after you release the key; long dictations get smart formatting in ~1 s (Apple M4) |
+| ⚡ **Fast** | Text lands ~100–700 ms after you release the key, even for long, formatted dictations: Kudu formats while you speak (Apple M4) |
 | 🔒 **Private** | Audio never leaves your computer |
 | 🪶 **Light** | ~14 MB app; the speech model (~450 MB) downloads once, then works offline |
 | 🧩 **Native** | A native app per platform, not a web wrapper |
@@ -22,9 +22,13 @@ cloud, no telemetry.
 ## Features
 - **A real Mac app:** a Dock icon, a Home dashboard with your words, speed, streak and full
   history, plus an animated menu-bar icon that moves with your voice.
-- **Smart formatting on device:** punctuation, paragraphs, numbered lists and numbers
-  written properly ("three thirty" → 3:30), using Apple's on-device model, without changing
-  your words.
+- **Smart formatting on device, while you speak:** numbered lists, numbers written properly
+  ("three thirty" → 3:30), letter layout and paragraphs, using Apple's on-device model, without
+  changing your words.
+- **Command mode (fn + ⌃):** select text and say "make this more formal", "translate to
+  Hindi" or "summarize"; with nothing selected, say what to write and Kudu drafts it.
+- **Styles per app:** Formal, Casual or Very casual for personal messages, work messages and
+  email, plus an editing strength from Verbatim to Polished.
 - **Hold to talk** on fn, Right ⌘ or Right ⌥. Double-tap for hands-free; Escape cancels.
 - **Works in every app.** Uses Accessibility insertion where it works and a clipboard paste
   elsewhere. Your clipboard is restored afterwards, and the paste key follows your keyboard layout.
