@@ -100,12 +100,44 @@ public final class OverlayPanel {
         }
     }
 
-    /// Bottom-center of the screen containing the mouse, just above the Dock.
+    /// Bottom-center of the screen containing the mouse: just above the Dock when the Dock is
+    /// showing, otherwise close to the bottom edge (full-screen apps, auto-hidden Dock).
     private func position() {
         let mouse = NSEvent.mouseLocation
-        let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
-        guard let visible = screen?.visibleFrame else { return }
-        panel.setFrameOrigin(NSPoint(x: visible.midX - canvas.width / 2, y: visible.minY + 14))
+        guard let screen = NSScreen.screens.first(where: { NSMouseInRect(mouse, $0.frame, false) }) ?? NSScreen.main
+        else { return }
+        let dockShowing = !ScreenPlacement.dockAutoHides && !ScreenPlacement.frontWindowIsFullScreen()
+        // visibleFrame always reserves the Dock's space, even when a full-screen app hides it.
+        let floor = dockShowing ? screen.visibleFrame.minY : screen.frame.minY
+        let gap: CGFloat = dockShowing ? 6 : 10
+        // The pill is vertically centered in the transparent canvas.
+        let pillHeight: CGFloat = 26
+        let y = floor + gap - (canvas.height - pillHeight) / 2
+        panel.setFrameOrigin(NSPoint(x: screen.frame.midX - canvas.width / 2, y: y))
+    }
+}
+
+/// Facts about the screen layout that NSScreen doesn't expose.
+@MainActor
+enum ScreenPlacement {
+    static var dockAutoHides: Bool {
+        UserDefaults(suiteName: "com.apple.dock")?.bool(forKey: "autohide") ?? false
+    }
+
+    /// Whether the focused window of the frontmost app is in full-screen mode (its own Space,
+    /// Dock hidden). Uses Accessibility, with a short timeout so a busy app can't stall us.
+    static func frontWindowIsFullScreen() -> Bool {
+        guard let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier else { return false }
+        let app = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(app, 0.1)
+        var window: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(app, kAXFocusedWindowAttribute as CFString, &window) == .success,
+              let window, CFGetTypeID(window) == AXUIElementGetTypeID()
+        else { return false }
+        var fullScreen: CFTypeRef?
+        guard AXUIElementCopyAttributeValue(window as! AXUIElement, "AXFullScreen" as CFString, &fullScreen) == .success
+        else { return false }
+        return (fullScreen as? Bool) ?? false
     }
 }
 
