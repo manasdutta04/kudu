@@ -1,0 +1,78 @@
+[package]
+name = "kudu-app"
+description = "Kudu for Windows and Linux: hold a key, speak, release, and the text appears"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "kudu"
+path = "src/main.rs"
+
+[features]
+default = ["smart"]
+smart = ["kudu-engine/smart"]
+
+[dependencies]
+kudu-core.workspace = true
+kudu-engine.workspace = true
+anyhow.workspace = true
+log.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+parking_lot.workspace = true
+crossbeam-channel.workspace = true
+regex.workspace = true
+eframe = { version = "0.36", default-features = false, features = ["accesskit", "default_fonts", "glow", "wayland", "x11"] }
+tiny-skia = "0.12"
+ab_glyph = "0.2"
+epaint_default_fonts = "0.36"
+arboard = { version = "3.6", features = ["wayland-data-control"] }
+directories = "6"
+env_logger = "0.11"
+image = { version = "0.25", default-features = false, features = ["png"] }
+bzip2 = "0.6"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+tray-icon = "0.26"
+windows-registry = "0.6"
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Storage_FileSystem",
+    "Win32_System_LibraryLoader",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+    "Win32_System_Time",
+    "Win32_System_DataExchange",
+    "Win32_System_Memory",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Input",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Shell",
+    "Win32_UI_Accessibility",
+    "Win32_System_Com",
+    "Win32_System_Ole",
+    "Win32_System_Variant",
+    "Win32_Media_Audio",
+] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+evdev = "0.13"
+ksni = { version = "0.3", features = ["blocking"] }
+x11rb = { version = "0.14", features = ["randr", "shape", "xfixes"] }
+smithay-client-toolkit = { version = "0.21", default-features = false, features = ["calloop"] }
+wayland-client = "0.31"
+zbus = { version = "5", default-features = false, features = ["blocking-api", "tokio"] }
+
+# Evaluated against the machine running the build, so the icon and version resource are
+# embedded when building on Windows (see build.rs).
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"
+ico = "0.5"
+image = { version = "0.25", default-features = false, features = ["png"] }
