@@ -12,7 +12,7 @@ import os
 public final class AudioRecorder: @unchecked Sendable {
     public static let sampleRate: Double = 16_000
 
-    /// Called on the audio thread with the RMS level (0...1) of each captured buffer.
+    /// Called on the audio thread with the raw RMS amplitude of each captured buffer (~20 ms).
     public var onLevel: (@Sendable (Float) -> Void)?
 
     public var keepWarm = false {
@@ -121,7 +121,7 @@ public final class AudioRecorder: @unchecked Sendable {
         var sum: Float = 0
         for sample in chunk { sum += sample * sample }
         let rms = chunk.isEmpty ? 0 : (sum / Float(chunk.count)).squareRoot()
-        onLevel?(min(1, rms * 4))
+        onLevel?(rms)
 
         let preRollLimit = Int(preRollSeconds * Self.sampleRate)
         let samples = Array(chunk)

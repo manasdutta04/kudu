@@ -16,22 +16,33 @@ public final class OverlayModel: ObservableObject {
     }
 
     @Published public var phase: Phase = .recording
-    /// Hands-free recording: shows a lock instead of requiring the key to be held.
+    /// Hands-free recording: shown as a small pulsing dot instead of requiring the key.
     @Published public var isLocked = false
-    /// Recent input levels (0...1), newest last, for the waveform bars.
-    @Published public var levels: [Float] = Array(repeating: 0, count: OverlayModel.barCount)
+    /// Smoothed loudness history (0...1), newest first. The middle bar shows the newest value
+    /// and older values ripple outward, so the wave follows the voice.
+    @Published public private(set) var history: [Float] = Array(repeating: 0, count: OverlayModel.historyLength)
 
-    static let barCount = 14
+    static let historyLength = 5
+    private var smoothed: Float = 0
 
     public init() {}
 
-    public func push(level: Float) {
-        levels.removeFirst()
-        levels.append(level)
+    /// Feed the RMS of one audio buffer (~20 ms).
+    public func push(rms: Float) {
+        // Perceived loudness is logarithmic: map −55 dBFS (room tone) … −12 dBFS (loud speech)
+        // onto 0…1, so quiet speech still moves the bars and loud speech doesn't pin them.
+        let decibels = 20 * log10(max(rms, 1e-6))
+        let target = min(1, max(0, (decibels + 55) / 43))
+        // Fast attack, slow release: jumps with each syllable, settles smoothly.
+        let rate: Float = target > smoothed ? 0.55 : 0.18
+        smoothed += (target - smoothed) * rate
+        history.removeLast()
+        history.insert(smoothed, at: 0)
     }
 
     public func resetLevels() {
-        levels = Array(repeating: 0, count: Self.barCount)
+        smoothed = 0
+        history = Array(repeating: 0, count: Self.historyLength)
     }
 }
 
@@ -41,11 +52,12 @@ public final class OverlayModel: ObservableObject {
 public final class OverlayPanel {
     public let model = OverlayModel()
     private let panel: NSPanel
-    private let size = NSSize(width: 220, height: 36)
+    /// The panel is a fixed transparent canvas; the pill inside sizes itself to its content.
+    private let canvas = NSSize(width: 260, height: 44)
 
     public init() {
         panel = NSPanel(
-            contentRect: NSRect(origin: .zero, size: size),
+            contentRect: NSRect(origin: .zero, size: canvas),
             styleMask: [.nonactivatingPanel, .borderless],
             backing: .buffered,
             defer: false
@@ -54,13 +66,13 @@ public final class OverlayPanel {
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = true
+        panel.hasShadow = false // the pill draws its own soft shadow
         panel.ignoresMouseEvents = true
         panel.hidesOnDeactivate = false
         panel.isReleasedWhenClosed = false
         panel.animationBehavior = .none
         let host = NSHostingView(rootView: OverlayView(model: model))
-        host.frame = NSRect(origin: .zero, size: size)
+        host.frame = NSRect(origin: .zero, size: canvas)
         panel.contentView = host
     }
 
@@ -93,45 +105,127 @@ public final class OverlayPanel {
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { NSMouseInRect(mouse, $0.frame, false) } ?? NSScreen.main
         guard let visible = screen?.visibleFrame else { return }
-        let origin = NSPoint(x: visible.midX - size.width / 2, y: visible.minY + 20)
-        panel.setFrameOrigin(origin)
+        panel.setFrameOrigin(NSPoint(x: visible.midX - canvas.width / 2, y: visible.minY + 14))
     }
 }
+
+// MARK: - Views
 
 struct OverlayView: View {
     @ObservedObject var model: OverlayModel
 
     var body: some View {
-        ZStack {
-            Capsule().fill(.black.opacity(0.85))
-            Capsule().strokeBorder(.white.opacity(0.12), lineWidth: 1)
-            content.padding(.horizontal, 14)
-        }
-        .frame(width: model.phase.isMessage ? 220 : 132, height: 36)
-        .frame(width: 220, height: 36)
+        content
+            .padding(.horizontal, 12)
+            .frame(height: 26)
+            .background(GlassBackground())
+            .clipShape(Capsule())
+            .overlay(Capsule().strokeBorder(.white.opacity(0.14), lineWidth: 0.5))
+            .shadow(color: .black.opacity(0.25), radius: 6, y: 2)
+            .frame(maxWidth: .infinity, maxHeight: .infinity) // centered in the canvas
+            .animation(.spring(response: 0.28, dampingFraction: 0.85), value: model.phase)
+            .animation(.spring(response: 0.28, dampingFraction: 0.85), value: model.isLocked)
     }
 
     @ViewBuilder private var content: some View {
         switch model.phase {
         case .recording:
-            HStack(spacing: 3) {
+            HStack(spacing: 7) {
                 if model.isLocked {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(.white.opacity(0.8))
-                        .padding(.trailing, 3)
+                    PulsingDot().transition(.scale.combined(with: .opacity))
                 }
-                ForEach(Array(model.levels.enumerated()), id: \.offset) { _, level in
-                    Capsule()
-                        .fill(.white)
-                        .frame(width: 3, height: 4 + CGFloat(level) * 18)
-                }
+                Waveform(history: model.history)
             }
-            .animation(.easeOut(duration: 0.08), value: model.levels)
         case .transcribing:
-            ProgressView().controlSize(.small).tint(.white)
+            ThinkingDots()
         case .message(let text):
-            Text(text).font(.system(size: 11, weight: .medium)).foregroundStyle(.white).lineLimit(1)
+            Text(text)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.white.opacity(0.92))
+                .lineLimit(1)
         }
     }
+}
+
+/// Nine thin bars, mirrored around the middle. The middle bar shows the newest loudness and
+/// each step outward shows a slightly older one with a gentle falloff, so speech ripples.
+private struct Waveform: View {
+    let history: [Float]
+
+    private static let barCount = 9
+    private static let minHeight: CGFloat = 3
+    private static let maxHeight: CGFloat = 14
+
+    var body: some View {
+        HStack(spacing: 2.5) {
+            ForEach(0..<Self.barCount, id: \.self) { index in
+                Capsule()
+                    .fill(.white.opacity(0.95))
+                    .frame(width: 2.5, height: height(for: index))
+            }
+        }
+        .frame(height: Self.maxHeight)
+        .animation(.linear(duration: 0.06), value: history)
+    }
+
+    private func height(for index: Int) -> CGFloat {
+        let center = Self.barCount / 2
+        let distance = abs(index - center)
+        let level = CGFloat(history[min(distance, history.count - 1)])
+        // Cosine-squared falloff: tall in the middle, tapering to about a third at the edges,
+        // so the outline stays rounded like a voice instead of a flat block.
+        let x = CGFloat(distance) / CGFloat(center + 1)
+        let falloff = 0.25 + 0.75 * pow(cos(x * .pi / 2), 2)
+        return Self.minHeight + (Self.maxHeight - Self.minHeight) * level * falloff
+    }
+}
+
+/// A small red dot that breathes: recording continues without holding the key.
+private struct PulsingDot: View {
+    var body: some View {
+        TimelineView(.animation) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            let pulse = 0.55 + 0.45 * (0.5 + 0.5 * sin(t * 2 * .pi / 1.6))
+            Circle()
+                .fill(Color(red: 1, green: 0.27, blue: 0.23))
+                .frame(width: 6, height: 6)
+                .opacity(pulse)
+                .shadow(color: Color(red: 1, green: 0.27, blue: 0.23).opacity(0.6 * pulse), radius: 3)
+        }
+    }
+}
+
+/// Three dots that rise and fall in turn while the speech model works.
+private struct ThinkingDots: View {
+    var body: some View {
+        TimelineView(.animation) { context in
+            let t = context.date.timeIntervalSinceReferenceDate
+            HStack(spacing: 4) {
+                ForEach(0..<3, id: \.self) { index in
+                    let phase = sin((t * 2 * .pi / 0.9) - Double(index) * 0.7)
+                    Circle()
+                        .fill(.white)
+                        .frame(width: 4, height: 4)
+                        .opacity(0.45 + 0.55 * (0.5 + 0.5 * phase))
+                        .offset(y: -1.5 * phase)
+                }
+            }
+            .frame(width: 40)
+        }
+    }
+}
+
+/// Frosted glass that blurs whatever is behind the panel (behind-window blending), with a
+/// light dark tint so white bars stay readable on any wallpaper.
+private struct GlassBackground: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .hudWindow
+        view.blendingMode = .behindWindow
+        view.state = .active
+        view.appearance = NSAppearance(named: .darkAqua)
+        return view
+    }
+
+    func updateNSView(_ view: NSVisualEffectView, context: Context) {}
 }
