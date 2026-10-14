@@ -49,29 +49,54 @@ public enum HotkeyEvent: Sendable {
 
 /// Watches the trigger key with a CGEventTap at session level.
 ///
-/// The tap is active (not listen-only) so it can swallow Escape while dictating.
+/// The tap is active (not listen-only) so it can swallow events: Escape while dictating, and
+/// every fn release, which macOS would otherwise turn into the emoji picker ("Press 🌐 key to").
 /// That requires Accessibility permission, which Kudu needs anyway to insert text.
-@MainActor
-public final class HotkeyMonitor {
-    public var trigger: TriggerKey
-    public var onEvent: ((HotkeyEvent) -> Void)?
-    /// Set by the owner while a dictation is in progress, so Escape can be swallowed.
-    public var isDictating = false
+///
+/// The tap runs on its own high-priority thread. If it ran on the main thread, any moment the
+/// UI is busy would make macOS time the tap out and let a fn release through to the system.
+/// Decisions are made on the tap thread; events are delivered to `onEvent` on the main thread.
+public final class HotkeyMonitor: @unchecked Sendable {
+    private struct State {
+        var trigger: TriggerKey
+        var isDictating = false
+        var triggerDown = false
+        var triggerDownAt: TimeInterval = 0
+        /// The physical fn key is down. Tracked separately from `triggerDown` because a hold can
+        /// be cancelled (Escape, a shortcut) while fn is still held, and its release must still
+        /// be swallowed.
+        var fnDown = false
+    }
 
-    private var tap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
-    private var triggerDown = false
-    private var triggerDownAt: TimeInterval = 0
+    private let state: OSAllocatedUnfairLock<State>
+    /// Called on the main thread.
+    @MainActor public var onEvent: ((HotkeyEvent) -> Void)?
+
+    public var trigger: TriggerKey {
+        get { state.withLock { $0.trigger } }
+        set { state.withLock { $0.trigger = newValue; $0.triggerDown = false } }
+    }
+
+    /// Set by the owner while a dictation is in progress, so Escape can be swallowed.
+    public var isDictating: Bool {
+        get { state.withLock { $0.isDictating } }
+        set { state.withLock { $0.isDictating = newValue } }
+    }
+
     /// A second modifier joining within this window means a shortcut (e.g. fn+⌃), not dictation.
     private let chordWindow: TimeInterval = 0.3
     private let log = Logger(subsystem: "app.kudu", category: "hotkey")
 
+    // Owned by start()/stop() on the main thread and read by the tap thread after start.
+    nonisolated(unsafe) private var tap: CFMachPort?
+    nonisolated(unsafe) private var tapRunLoop: CFRunLoop?
+
     public init(trigger: TriggerKey) {
-        self.trigger = trigger
+        state = OSAllocatedUnfairLock(initialState: State(trigger: trigger))
     }
 
     /// Returns false when the tap could not be created (usually: Accessibility not granted yet).
-    @discardableResult
+    @MainActor @discardableResult
     public func start() -> Bool {
         guard tap == nil else { return true }
         let mask: CGEventMask =
@@ -89,67 +114,109 @@ public final class HotkeyMonitor {
             return false
         }
         self.tap = tap
-        let source = CFMachPortCreateRunLoopSource(nil, tap, 0)
-        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
-        runLoopSource = source
-        CGEvent.tapEnable(tap: tap, enable: true)
+
+        let ready = DispatchSemaphore(value: 0)
+        let thread = Thread { [weak self] in
+            guard let self, let source = CFMachPortCreateRunLoopSource(nil, tap, 0) else {
+                ready.signal()
+                return
+            }
+            let runLoop = CFRunLoopGetCurrent()
+            self.tapRunLoop = runLoop
+            CFRunLoopAddSource(runLoop, source, .commonModes)
+            CGEvent.tapEnable(tap: tap, enable: true)
+            ready.signal()
+            CFRunLoopRun()
+        }
+        thread.name = "app.kudu.hotkey"
+        thread.qualityOfService = .userInteractive
+        thread.start()
+        ready.wait()
         return true
     }
 
+    @MainActor
     public func stop() {
-        if let tap { CGEvent.tapEnable(tap: tap, enable: false) }
-        if let runLoopSource { CFRunLoopRemoveSource(CFRunLoopGetMain(), runLoopSource, .commonModes) }
+        if let tap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+            CFMachPortInvalidate(tap)
+        }
+        if let tapRunLoop { CFRunLoopStop(tapRunLoop) }
         tap = nil
-        runLoopSource = nil
-        triggerDown = false
+        tapRunLoop = nil
+        state.withLock { $0.triggerDown = false; $0.fnDown = false }
     }
 
-    /// Runs on the main run loop (the tap source is attached there). Returns true to swallow the event.
+    /// Runs on the tap thread and must return quickly. Returns true to swallow the event.
     fileprivate func handle(type: CGEventType, keyCode: Int64, flags: CGEventFlags) -> Bool {
         switch type {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
+            log.info("Event tap was disabled (\(type.rawValue)); re-enabling")
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
             return false
 
         case .flagsChanged:
-            guard keyCode == trigger.keyCode else {
-                // Another modifier joined the trigger (e.g. fn+⌃): treat as a shortcut, not dictation.
-                if triggerDown, ProcessInfo.processInfo.systemUptime - triggerDownAt < chordWindow {
-                    cancelHold()
+            let (swallow, events) = state.withLock { state -> (Bool, [HotkeyEvent]) in
+                var events: [HotkeyEvent] = []
+                var swallow = false
+                if keyCode == TriggerKey.fn.keyCode {
+                    let down = flags.contains(.maskSecondaryFn)
+                    // While fn is the dictation key, macOS must never see a fn release on its own.
+                    if !down && state.fnDown && state.trigger == .fn { swallow = true }
+                    state.fnDown = down
                 }
-                return false
+
+                guard keyCode == state.trigger.keyCode else {
+                    // Another modifier joined the trigger (e.g. fn+⌃): a shortcut, not dictation.
+                    if state.triggerDown,
+                       ProcessInfo.processInfo.systemUptime - state.triggerDownAt < chordWindow {
+                        state.triggerDown = false
+                        events.append(.cancelled)
+                    }
+                    return (swallow, events)
+                }
+                let isDown = state.trigger.isDown(in: flags)
+                if isDown && !state.triggerDown {
+                    state.triggerDown = true
+                    state.triggerDownAt = ProcessInfo.processInfo.systemUptime
+                    events.append(.pressed)
+                } else if !isDown && state.triggerDown {
+                    state.triggerDown = false
+                    events.append(.released)
+                }
+                return (swallow, events)
             }
-            let isDown = trigger.isDown(in: flags)
-            if isDown && !triggerDown {
-                triggerDown = true
-                triggerDownAt = ProcessInfo.processInfo.systemUptime
-                onEvent?(.pressed)
-            } else if !isDown && triggerDown {
-                triggerDown = false
-                onEvent?(.released)
-                // A lone fn release opens the emoji picker / switches input source (the
-                // "Press 🌐 key to" setting). Swallow it after a dictation so that doesn't happen.
-                return trigger == .fn
-            }
-            return false
+            emit(events)
+            return swallow
 
         case .keyDown:
-            if keyCode == 53 /* kVK_Escape */, isDictating {
-                cancelHold()
-                return true
+            let (swallow, events) = state.withLock { state -> (Bool, [HotkeyEvent]) in
+                if keyCode == 53 /* kVK_Escape */, state.isDictating {
+                    state.triggerDown = false
+                    return (true, [.cancelled])
+                }
+                // Any regular key while the trigger is held means the user is typing a shortcut.
+                if state.triggerDown {
+                    state.triggerDown = false
+                    return (false, [.cancelled])
+                }
+                return (false, [])
             }
-            // Any regular key while the trigger is held means the user is typing a shortcut.
-            if triggerDown { cancelHold() }
-            return false
+            emit(events)
+            return swallow
 
         default:
             return false
         }
     }
 
-    private func cancelHold() {
-        triggerDown = false
-        onEvent?(.cancelled)
+    private func emit(_ events: [HotkeyEvent]) {
+        guard !events.isEmpty else { return }
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                for event in events { self?.onEvent?(event) }
+            }
+        }
     }
 }
 
@@ -161,9 +228,7 @@ private func hotkeyTapCallback(
 ) -> Unmanaged<CGEvent>? {
     guard let refcon else { return Unmanaged.passUnretained(event) }
     let monitor = Unmanaged<HotkeyMonitor>.fromOpaque(refcon).takeUnretainedValue()
-    // The run loop source lives on the main run loop, so this is already the main thread.
     let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-    let flags = event.flags
-    let swallow = MainActor.assumeIsolated { monitor.handle(type: type, keyCode: keyCode, flags: flags) }
+    let swallow = monitor.handle(type: type, keyCode: keyCode, flags: event.flags)
     return swallow ? nil : Unmanaged.passUnretained(event)
 }
