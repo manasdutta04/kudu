@@ -3,6 +3,16 @@
 All notable changes to Kudu are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com) and the project uses [Semantic Versioning](https://semver.org).
 
+## [0.4.1] - 2026-10-14
+### Added
+- A native menu-bar menu with Paste last transcript (⌃⌘V) and quick submenus for the
+  dictation key, recording mode, microphone and editing strength.
+- Microphone choice (System default or any input device).
+
+### Changed
+- Refined controls throughout the app: quiet value menus, themed segmented controls,
+  accent switches, soft buttons and fields, and shortcuts shown as keycaps.
+
 ## [0.4.0] - 2026-10-14
 ### Added
 - **Command mode (fn + ⌃).** Select text, hold fn and Control, and say what to do: "make
