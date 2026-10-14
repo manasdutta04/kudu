@@ -43,6 +43,15 @@ public final class DictationController: ObservableObject {
     @Published public var recordingMode: RecordingMode {
         didSet { UserDefaults.standard.set(recordingMode.rawValue, forKey: Keys.recordingMode) }
     }
+    /// The microphone to record from (its Core Audio UID); nil follows the system default.
+    @Published public var microphoneUID: String? {
+        didSet {
+            UserDefaults.standard.set(microphoneUID, forKey: Keys.microphone)
+            recorder.setInputDevice(uid: microphoneUID)
+        }
+    }
+    public var microphones: [AudioInputDevice] { AudioDevices.inputs() }
+
     @Published public var soundsEnabled: Bool {
         didSet {
             sounds.isEnabled = soundsEnabled
@@ -90,6 +99,7 @@ public final class DictationController: ObservableObject {
         static let trigger = "triggerKey"
         static let soundsEnabled = "soundsEnabled"
         static let recordingMode = "recordingMode"
+        static let microphone = "microphoneUID"
         static let preventEmojiPicker = "preventEmojiPicker"
     }
 
@@ -105,6 +115,7 @@ public final class DictationController: ObservableObject {
         self.recordingMode = defaults.string(forKey: Keys.recordingMode)
             .flatMap(RecordingMode.init(rawValue:)) ?? .holdOrDoubleTap
         self.soundsEnabled = defaults.object(forKey: Keys.soundsEnabled) as? Bool ?? true
+        self.microphoneUID = defaults.string(forKey: Keys.microphone)
         self.hotkey = HotkeyMonitor(trigger: trigger)
         sounds.isEnabled = soundsEnabled
         hotkey.suppressFn = preventEmojiPicker
@@ -126,7 +137,11 @@ public final class DictationController: ObservableObject {
     /// Call once at launch, and again after permissions change.
     public func activate() {
         if Permissions.microphoneGranted {
-            recorder.prepare()
+            if microphoneUID != nil {
+                recorder.setInputDevice(uid: microphoneUID)
+            } else {
+                recorder.prepare()
+            }
         }
         hotkeyActive = Permissions.accessibilityGranted && hotkey.start()
         updateFnGuard()
@@ -211,6 +226,12 @@ public final class DictationController: ObservableObject {
         Task { await inserter.insert(raw ? record.raw : record.text) }
     }
 
+    /// Types the most recent result at the cursor again (⌃⌘V, or the menu).
+    public func pasteLastTranscript() {
+        guard let last = history.records.first else { return }
+        reinsert(last)
+    }
+
     public func copyToClipboard(_ record: DictationRecord, raw: Bool = false) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(raw ? record.raw : record.text, forType: .string)
@@ -243,6 +264,8 @@ public final class DictationController: ObservableObject {
             beginCommand()
         case .commandReleased:
             finishCommand()
+        case .pasteLast:
+            pasteLastTranscript()
         }
     }
 

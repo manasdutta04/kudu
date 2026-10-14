@@ -44,6 +44,26 @@ public final class AudioRecorder: @unchecked Sendable {
         if let configObserver { NotificationCenter.default.removeObserver(configObserver) }
     }
 
+    /// Records from this microphone instead of the system default (nil = system default).
+    /// Applied right away when idle, otherwise after the current dictation.
+    public func setInputDevice(uid: String?) {
+        guard !isRecording else { return }
+        engine.stop()
+        if tapInstalled {
+            engine.inputNode.removeTap(onBus: 0)
+            tapInstalled = false
+        }
+        if let uid, let device = AudioDevices.device(uid: uid), let unit = engine.inputNode.audioUnit {
+            var id = device.deviceID
+            let status = AudioUnitSetProperty(
+                unit, kAudioOutputUnitProperty_CurrentDevice, kAudioUnitScope_Global, 0, &id,
+                UInt32(MemoryLayout<AudioDeviceID>.size))
+            if status != noErr { log.error("Couldn't select microphone \(device.name, privacy: .public): \(status)") }
+        }
+        installTapIfNeeded()
+        engine.prepare()
+    }
+
     /// Builds the tap and prepares the engine so the first `start()` is fast.
     public func prepare() {
         installTapIfNeeded()

@@ -59,6 +59,8 @@ public enum HotkeyEvent: Sendable {
     case commandPressed
     /// The trigger was released after `commandPressed`.
     case commandReleased
+    /// ⌃⌘V: paste the last transcript again.
+    case pasteLast
 }
 
 /// Watches the trigger key with a CGEventTap at session level.
@@ -211,6 +213,12 @@ public final class HotkeyMonitor: @unchecked Sendable {
 
         case .keyDown:
             let (disposition, events) = state.withLock { state -> (Disposition, [HotkeyEvent]) in
+                // ⌃⌘V anywhere: paste the last transcript again (swallowed, so the app doesn't
+                // also receive a ⌃⌘V of its own).
+                if keyCode == 9 /* kVK_ANSI_V */, flags.contains(.maskControl), flags.contains(.maskCommand),
+                   !flags.contains(.maskShift), !flags.contains(.maskAlternate), !state.triggerDown {
+                    return (.swallow, [.pasteLast])
+                }
                 if keyCode == 53 /* kVK_Escape */, state.isDictating {
                     state.triggerDown = false
                     state.commandActive = false
