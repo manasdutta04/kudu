@@ -1,7 +1,9 @@
 .DS_Store
-/.build/
-/build/
-/.swiftpm/
+
+# Swift / macOS
+.build/
+build/
+.swiftpm/
 *.xcodeproj/
 DerivedData/
 xcuserdata/

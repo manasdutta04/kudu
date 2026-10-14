@@ -1,6 +1,7 @@
-# Architecture
+# Architecture (macOS)
 
-Kudu is a menu-bar app built as a Swift package with three layers.
+Kudu for macOS is a menu-bar app built as a Swift package with three layers. Paths below
+are relative to this `macos/` folder.
 
 ```
 Sources/

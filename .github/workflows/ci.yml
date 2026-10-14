@@ -10,8 +10,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-test:
+  macos:
+    name: macOS app
     runs-on: macos-26
+    defaults:
+      run:
+        working-directory: macos
     steps:
       - uses: actions/checkout@v4
 
@@ -21,8 +25,8 @@ jobs:
       - name: Cache SwiftPM
         uses: actions/cache@v4
         with:
-          path: .build
-          key: spm-${{ runner.os }}-${{ hashFiles('Package.resolved') }}
+          path: macos/.build
+          key: spm-${{ runner.os }}-${{ hashFiles('macos/Package.resolved') }}
 
       - name: Unit tests
         run: swift test
