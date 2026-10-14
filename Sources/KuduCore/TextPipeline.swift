@@ -38,4 +38,9 @@ public struct TextPipeline: Sendable {
         stages.reduce(text) { partial, stage in stage.apply(partial, context: context) }
     }
 
+    /// Minimal pipeline for M1: tidy whitespace and fit the text to the cursor position.
+    public static let basic = TextPipeline(stages: [
+        WhitespaceNormalizer(),
+        CursorFitter(),
+    ])
 }
