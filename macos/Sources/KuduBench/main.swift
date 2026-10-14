@@ -2,6 +2,8 @@
 // pipeline the app uses, and prints per-file timings.
 //
 //   swift run -c release kudu-bench clip1.wav clip2.wav
+//   swift run -c release kudu-bench --format clip1.wav          (also run smart formatting)
+//   swift run -c release kudu-bench --format --text "raw words"  (format text, no audio)
 import AVFoundation
 import Foundation
 import os
@@ -28,10 +30,41 @@ func loadSamples(_ url: URL) throws -> [Float] {
     return Array(UnsafeBufferPointer(start: output.floatChannelData![0], count: Int(output.frameLength)))
 }
 
-let paths = CommandLine.arguments.dropFirst()
-guard !paths.isEmpty else {
-    print("usage: kudu-bench <file.wav>...")
+var arguments = Array(CommandLine.arguments.dropFirst())
+let formatting = arguments.contains("--format")
+let textMode = arguments.contains("--text")
+arguments.removeAll { $0 == "--format" || $0 == "--text" }
+guard !arguments.isEmpty else {
+    print("usage: kudu-bench [--format] <file.wav>...  |  kudu-bench --format --text \"raw words\"...")
     exit(1)
+}
+
+let settings = CleanupSettings()
+let formatter = await SmartFormatter()
+if formatting {
+    print("Smart formatting available: \(await formatter.isAvailable)")
+    await formatter.prewarm()
+}
+
+/// Rule cleanup, then (with --format) the on-device model, then final touches — like the app.
+func clean(_ raw: String) async -> (text: String, formatMs: Double?) {
+    var text = TextPipeline.beforeFormatting(settings: settings).process(raw)
+    var formatMs: Double?
+    if formatting, settings.smartFormatting.applies(toWordCount: WordCount.count(text)) {
+        let start = ContinuousClock.now
+        if let formatted = await formatter.format(text, category: .general, terms: []) { text = formatted }
+        formatMs = (ContinuousClock.now - start) / .milliseconds(1)
+    }
+    return (TextPipeline.afterFormatting(settings: settings).process(text), formatMs)
+}
+
+if textMode {
+    for raw in arguments {
+        let result = await clean(raw)
+        print("• \(raw)")
+        print("  → \(result.text)" + (result.formatMs.map { String(format: "   [%.0f ms]", $0) } ?? "   [rules only]"))
+    }
+    exit(0)
 }
 
 if !ParakeetEngine.isDownloaded {
@@ -56,13 +89,16 @@ let loadStart = ContinuousClock.now
 try await engine.load()
 print("Model loaded + warmed in \(ContinuousClock.now - loadStart)")
 
-for path in paths {
+for path in arguments {
     let samples = try loadSamples(URL(fileURLWithPath: path))
     let start = ContinuousClock.now
     let raw = try await engine.transcribe(samples)
-    let text = TextPipeline.basic.process(raw)
-    let elapsed = (ContinuousClock.now - start) / .milliseconds(1)
+    let asrMs = (ContinuousClock.now - start) / .milliseconds(1)
+    let result = await clean(raw)
+    let totalMs = (ContinuousClock.now - start) / .milliseconds(1)
     let seconds = Double(samples.count) / 16_000
-    print(String(format: "%@  %.1fs audio  %.0f ms  (%.0fx real time)", path, seconds, elapsed, seconds * 1000 / elapsed))
-    print("  → \(text)")
+    print(String(format: "%@  %.1fs audio  speech %.0f ms (%.0fx real time)  total %.0f ms",
+                 path, seconds, asrMs, seconds * 1000 / asrMs, totalMs))
+    print("  raw → \(raw)")
+    print("  out → \(result.text)")
 }
