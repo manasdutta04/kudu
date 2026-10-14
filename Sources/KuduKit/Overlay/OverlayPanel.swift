@@ -8,6 +8,11 @@ public final class OverlayModel: ObservableObject {
         case recording
         case transcribing
         case message(String)
+
+        var isMessage: Bool {
+            if case .message = self { return true }
+            return false
+        }
     }
 
     @Published public var phase: Phase = .recording
@@ -36,7 +41,7 @@ public final class OverlayModel: ObservableObject {
 public final class OverlayPanel {
     public let model = OverlayModel()
     private let panel: NSPanel
-    private let size = NSSize(width: 132, height: 36)
+    private let size = NSSize(width: 220, height: 36)
 
     public init() {
         panel = NSPanel(
@@ -102,7 +107,8 @@ struct OverlayView: View {
             Capsule().strokeBorder(.white.opacity(0.12), lineWidth: 1)
             content.padding(.horizontal, 14)
         }
-        .frame(width: 132, height: 36)
+        .frame(width: model.phase.isMessage ? 220 : 132, height: 36)
+        .frame(width: 220, height: 36)
     }
 
     @ViewBuilder private var content: some View {

@@ -232,6 +232,12 @@ public final class DictationController: ObservableObject {
             return
         }
 
+        if AudioLevels.isSilent(samples) {
+            log.error("Recording was pure silence; microphone muted or unavailable?")
+            overlay.flash("No sound from the microphone", for: .seconds(3))
+            return
+        }
+
         overlay.show(.transcribing)
         sounds.playStop()
         let releasedAt = ContinuousClock.now
