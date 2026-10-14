@@ -29,14 +29,16 @@ public final class DictationController: ObservableObject {
         didSet {
             hotkey.trigger = trigger
             UserDefaults.standard.set(trigger.rawValue, forKey: Keys.trigger)
+            updateFnGuard()
         }
     }
-    /// While fn is the dictation key, hide fn presses from the system so taps and double-taps
-    /// don't open the emoji picker. fn behaves normally again as soon as Kudu quits.
+    /// While fn is the dictation key, pause the system's 🌐 action and hide fn presses, so taps
+    /// and double-taps don't open the emoji picker. Restored as soon as Kudu quits.
     @Published public var preventEmojiPicker: Bool {
         didSet {
             UserDefaults.standard.set(preventEmojiPicker, forKey: Keys.preventEmojiPicker)
             hotkey.suppressFn = preventEmojiPicker
+            updateFnGuard()
         }
     }
     @Published public var recordingMode: RecordingMode {
@@ -61,6 +63,7 @@ public final class DictationController: ObservableObject {
     private let inserter = TextInserter()
     private let overlay = OverlayPanel()
     private let sounds = SoundCues()
+    private let fnGuard = FnKeyGuard()
     public let store: UserDataStore
     private var recordingStartedAt: ContinuousClock.Instant?
     private var transcriptionTask: Task<Void, Never>?
@@ -95,9 +98,6 @@ public final class DictationController: ObservableObject {
         self.hotkey = HotkeyMonitor(trigger: trigger)
         sounds.isEnabled = soundsEnabled
         hotkey.suppressFn = preventEmojiPicker
-        // Version 0.2 paused the system 🌐 setting instead; macOS only applies that at login,
-        // so it didn't help. Give back the user's original setting if it is still paused.
-        FnKeyGuard().disengage()
         hotkey.onEvent = { [weak self] event in self?.handle(event) }
         let overlayModel = overlay.model
         recorder.onLevel = { level in
@@ -112,14 +112,25 @@ public final class DictationController: ObservableObject {
             recorder.prepare()
         }
         hotkeyActive = Permissions.accessibilityGranted && hotkey.start()
+        updateFnGuard()
         if case .missing = modelState, ParakeetEngine.isDownloaded {
             Task { await loadModel() }
         }
     }
 
-    /// Call when the app is quitting.
+    /// Call when the app is quitting: gives the 🌐 key its own action back.
     public func shutdown() {
+        fnGuard.disengage()
         hotkey.stop()
+    }
+
+    private func updateFnGuard() {
+        if hotkeyActive && trigger == .fn && preventEmojiPicker {
+            fnGuard.engage()
+        } else {
+            // Also cleans up after a previous run that was killed while engaged.
+            fnGuard.disengage()
+        }
     }
 
     // MARK: - Model

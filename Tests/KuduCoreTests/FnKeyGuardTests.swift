@@ -3,25 +3,17 @@ import Testing
 @testable import KuduCore
 
 /// In-memory stand-ins so tests never touch the real system setting.
-final class FakePreferences: PreferencesBackend, @unchecked Sendable {
-    var anyHost: Int?
-    var currentHost: Int?
-    var syncCount = 0
+final class FakeFnUsage: FnUsageBackend, @unchecked Sendable {
+    var value: Int?
+    var writes = 0
 
-    init(anyHost: Int?, currentHost: Int?) {
-        self.anyHost = anyHost
-        self.currentHost = currentHost
+    init(_ value: Int?) { self.value = value }
+
+    func current() -> Int? { value }
+    func set(_ value: Int) {
+        self.value = value
+        writes += 1
     }
-
-    func value(forKey key: String, domain: String, currentHost: Bool) -> Int? {
-        currentHost ? self.currentHost : anyHost
-    }
-
-    func setValue(_ value: Int?, forKey key: String, domain: String, currentHost: Bool) {
-        if currentHost { self.currentHost = value } else { anyHost = value }
-    }
-
-    func synchronize(domain: String) { syncCount += 1 }
 }
 
 final class FakeMemory: GuardMemory {
@@ -34,55 +26,58 @@ final class FakeMemory: GuardMemory {
 
 @Suite struct FnKeyGuardTests {
     @Test func engagePausesAndDisengageRestores() {
-        let prefs = FakePreferences(anyHost: 2, currentHost: nil)
-        let guardian = FnKeyGuard(preferences: prefs, memory: FakeMemory())
+        let system = FakeFnUsage(2)
+        let guardian = FnKeyGuard(backend: system, memory: FakeMemory())
 
         guardian.engage()
-        #expect(prefs.anyHost == 0)
-        #expect(prefs.currentHost == 0)
+        #expect(system.value == 0)
         #expect(guardian.isEngaged)
 
         guardian.disengage()
-        #expect(prefs.anyHost == 2)
-        #expect(prefs.currentHost == nil, "a key that wasn't set before is removed again")
+        #expect(system.value == 2)
         #expect(!guardian.isEngaged)
     }
 
     @Test func crashRecoveryKeepsTheOriginalValue() {
-        let prefs = FakePreferences(anyHost: 2, currentHost: nil)
+        let system = FakeFnUsage(2)
         let memory = FakeMemory()
-        FnKeyGuard(preferences: prefs, memory: memory).engage()
+        FnKeyGuard(backend: system, memory: memory).engage()
 
         // Kudu was killed without restoring; a new launch engages again.
-        let relaunched = FnKeyGuard(preferences: prefs, memory: memory)
+        let relaunched = FnKeyGuard(backend: system, memory: memory)
         relaunched.engage()
         relaunched.disengage()
-        #expect(prefs.anyHost == 2, "the paused 0 must never be saved as the original")
+        #expect(system.value == 2, "the paused 0 must never be saved as the original")
     }
 
     @Test func userChoiceMadeWhileEngagedWins() {
-        let prefs = FakePreferences(anyHost: 2, currentHost: nil)
-        let guardian = FnKeyGuard(preferences: prefs, memory: FakeMemory())
+        let system = FakeFnUsage(2)
+        let guardian = FnKeyGuard(backend: system, memory: FakeMemory())
         guardian.engage()
-        prefs.anyHost = 1 // user picked "Change Input Source" in System Settings
+        system.value = 1 // user picked "Change Input Source" in System Settings
         guardian.disengage()
-        #expect(prefs.anyHost == 1)
+        #expect(system.value == 1)
     }
 
     @Test func disengageWithoutEngageDoesNothing() {
-        let prefs = FakePreferences(anyHost: 2, currentHost: 3)
-        FnKeyGuard(preferences: prefs, memory: FakeMemory()).disengage()
-        #expect(prefs.anyHost == 2)
-        #expect(prefs.currentHost == 3)
-        #expect(prefs.syncCount == 0)
+        let system = FakeFnUsage(3)
+        FnKeyGuard(backend: system, memory: FakeMemory()).disengage()
+        #expect(system.value == 3)
+        #expect(system.writes == 0)
     }
 
-    @Test func alreadyDoNothingStaysDoNothing() {
-        let prefs = FakePreferences(anyHost: 0, currentHost: nil)
-        let guardian = FnKeyGuard(preferences: prefs, memory: FakeMemory())
+    @Test func alreadyDoNothingIsLeftAlone() {
+        let system = FakeFnUsage(0)
+        let guardian = FnKeyGuard(backend: system, memory: FakeMemory())
         guardian.engage()
         guardian.disengage()
-        #expect(prefs.anyHost == 0)
-        #expect(prefs.currentHost == nil)
+        #expect(system.value == 0)
+        #expect(system.writes == 0)
+    }
+
+    @Test func unavailableSystemSettingIsNotEngaged() {
+        let guardian = FnKeyGuard(backend: FakeFnUsage(nil), memory: FakeMemory())
+        guardian.engage()
+        #expect(!guardian.isEngaged)
     }
 }
