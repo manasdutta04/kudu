@@ -85,6 +85,7 @@ extension TextPipeline {
         var stages: [any TextStage] = []
         if settings.normalizeTimes { stages.append(TimeNormalizer()) }
         stages.append(WhitespaceNormalizer())
+        stages.append(LineStartCapitalizer())
         stages.append(CursorFitter())
         return TextPipeline(stages: stages)
     }

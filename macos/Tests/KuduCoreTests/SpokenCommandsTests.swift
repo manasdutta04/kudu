@@ -24,3 +24,22 @@ import Testing
         #expect(stage.apply(text, context: TextContext()) == text)
     }
 }
+
+@Suite struct LineStartCapitalizerTests {
+    let stage = LineStartCapitalizer()
+
+    @Test func capitalizesEachNewLine() {
+        #expect(stage.apply("Dear Priya,\nthanks for this.\n\nbest,\nManas", context: TextContext())
+            == "Dear Priya,\nThanks for this.\n\nBest,\nManas")
+    }
+
+    @Test func handlesNumberedListItems() {
+        #expect(stage.apply("We need:\n1. the page\n2. the email", context: TextContext())
+            == "We need:\n1. The page\n2. The email")
+    }
+
+    @Test func leavesFirstLineAndSingleLinesAlone() {
+        #expect(stage.apply("and then more", context: TextContext()) == "and then more")
+        #expect(stage.apply("and then\nmore", context: TextContext()) == "and then\nMore")
+    }
+}
