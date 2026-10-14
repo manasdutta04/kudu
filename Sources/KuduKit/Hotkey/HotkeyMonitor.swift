@@ -127,6 +127,9 @@ public final class HotkeyMonitor {
             } else if !isDown && triggerDown {
                 triggerDown = false
                 onEvent?(.released)
+                // A lone fn release opens the emoji picker / switches input source (the
+                // "Press 🌐 key to" setting). Swallow it after a dictation so that doesn't happen.
+                return trigger == .fn
             }
             return false
 
