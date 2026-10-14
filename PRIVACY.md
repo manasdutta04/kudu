@@ -34,8 +34,6 @@ When fn is the dictation key, Kudu sets **System Settings → Keyboard → "Pres
 saved first and put back the moment Kudu quits (or the next time it starts, if it crashed).
 You can turn this off in Kudu's menu.
 
-## Warm microphone
-After each dictation the microphone stays open for one minute, so a follow-up dictation starts
-instantly and keeps its first syllable. "Keep microphone always warm" in Settings leaves it
-open all the time. Either way macOS shows the orange microphone indicator while it is open,
-and audio captured while idle is kept only as a rolling 0.3-second buffer in memory.
+## Microphone
+The microphone is open only while you are dictating: it turns on when you press the dictation
+key and off the moment you stop. macOS's orange microphone indicator is never on otherwise.

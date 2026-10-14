@@ -34,7 +34,7 @@ fn up   ─▶ AudioRecorder.stop ─▶ ParakeetEngine.transcribe ─▶ rule c
 
 ### Audio (`KuduKit/Audio`)
 - `AVAudioEngine` with a tap on the input node, converted to 16 kHz mono with `AVAudioConverter`.
-- The engine is prepared ahead of time. After each dictation it stays warm for 60 s with a 0.3 s pre-roll buffer, so a follow-up dictation keeps its first syllable; "Keep microphone always warm" keeps it running.
+- The microphone is open only during a dictation: `start()` starts the engine and `stop()` stops it, so the macOS microphone indicator is off otherwise. The engine is prepared ahead of time, and again after each stop, so starting is quick.
 - Device changes rebuild the tap. A cold microphone's start-up delay is logged.
 
 ### Speech (`KuduKit/ASR`)

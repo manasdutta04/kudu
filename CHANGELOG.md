@@ -3,6 +3,11 @@
 All notable changes to Kudu are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com) and the project uses [Semantic Versioning](https://semver.org).
 
+## [0.3.1] - 2026-10-14
+### Changed
+- The microphone is open only while you dictate. Removed the one-minute warm period after
+  each dictation and the "Keep microphone always warm" option.
+
 ## [0.3.0] - 2026-10-14
 ### Added
 - Kudu is now a desktop app:
