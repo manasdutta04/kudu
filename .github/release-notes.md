@@ -44,7 +44,9 @@ Kudu downloads its speech model once (Mac ~450 MB; Windows/Linux: Accurate 482 M
 
 ## What's in this release
 
-- **macOS 0.8.0:** customizable shortcuts for dictation, Command mode and paste-last; Apple Silicon only. Plus everything from 0.5–0.7: learning from your corrections with an Undo notice, sound-alike spelling (names on screen and in your dictionary), native formatting per app (lists, units, math, @mentions, code and terminal), Insights with a streak heat map.
+This is Kudu's first public release.
+
+- **macOS:** hold fn (or any shortcut you set) to dictate; formatting while you speak with Apple's on-device model (lists, numbers, units, math, @mentions, email layout, code and terminal commands); Command mode to rewrite or draft text; styles per app; a personal dictionary that learns from your corrections, with an Undo notice; names and terms spelled the way they appear on screen; snippets; history and Insights with a streak heat map. Apple Silicon only.
 - **Windows and Linux (first beta):** the same text cleanup, styles, dictionary, snippets, learning and shortcuts as the Mac app, with on-device speech (Parakeet or Moonshine) and an optional small language model (Qwen2.5). Please report anything that doesn't work on your setup.
 
 Files are listed with SHA-256 checksums in `SHA256SUMS.txt`.

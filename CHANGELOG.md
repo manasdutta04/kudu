@@ -3,8 +3,10 @@
 All notable changes to Kudu are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com) and the project uses [Semantic Versioning](https://semver.org).
 
-## [0.8.0] - 2026-10-14
-First release with downloadable packages for macOS, Windows and Linux.
+## [0.1.0] - 2026-10-14
+**First public release**, with packages for macOS, Windows and Linux. The entries below it
+(0.2–0.7) are the development milestones that led up to it; they were never released
+separately.
 
 ### Windows and Linux (beta)
 - **Release packages:** Kudu for macOS (.dmg/.zip), Windows (.zip) and Linux (.tar.gz) on
