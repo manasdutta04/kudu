@@ -13,8 +13,30 @@ public enum CommandOutput {
     private static let afterword = try! NSRegularExpression(
         pattern: "\\n+\\s*(let me know|i hope this|feel free to|is there anything)[^\\n]*$", options: [.caseInsensitive])
 
-    public static func clean(_ output: String) -> String {
+    /// Lines where the model repeated its prompt instead of answering.
+    private static let echo = try! NSRegularExpression(
+        pattern: "^\\s*(instruction|request)\\s*:.*$|^\\s*(write the text now|apply it to this text|return only)\\b.*$",
+        options: [.caseInsensitive, .anchorsMatchLines])
+
+    /// Instructions that edit existing text ("fix this", "make it shorter", "translate that
+    /// to Hindi"), which need a selection, as opposed to drafting ("write a reply saying…").
+    private static let editsExistingText = try! NSRegularExpression(
+        pattern: "^(please )?(fix|rewrite|rephrase|reword|translate|shorten|summari[sz]e|make|improve|proofread|correct|format|simplify|expand|polish|edit|change|convert|turn|clean up|tidy|check)\\b.*\\b(this|it|that|these|those|them|the text|the selection|the above|the grammar|the spelling|the tone|the wording)\\b",
+        options: [.caseInsensitive])
+
+    public static func needsSelection(_ instruction: String) -> Bool {
+        let text = instruction.trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters))
+        return editsExistingText.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)) != nil
+    }
+
+    public static func clean(_ output: String, instruction: String? = nil) -> String {
         var text = output.trimmingCharacters(in: .whitespacesAndNewlines)
+        text = echo.stringByReplacingMatches(in: text, range: NSRange(text.startIndex..., in: text), withTemplate: "")
+        if let instruction, text.trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters)).lowercased()
+            == instruction.trimmingCharacters(in: .whitespacesAndNewlines.union(.punctuationCharacters)).lowercased() {
+            return "" // just the instruction said back
+        }
+        text = text.trimmingCharacters(in: .whitespacesAndNewlines)
         var range = NSRange(text.startIndex..., in: text)
         text = preamble.stringByReplacingMatches(in: text, range: range, withTemplate: "")
         range = NSRange(text.startIndex..., in: text)

@@ -69,7 +69,7 @@ extension TextPipeline {
         if !snippets.isEmpty { stages.append(SnippetStage(snippets: snippets, clipboard: clipboard)) }
         if settings.removeFillers { stages.append(FillerRemover()) }
         if settings.applySelfCorrections { stages.append(SelfCorrection()) }
-        if settings.spokenCommands { stages.append(SpokenCommands()) }
+        if settings.spokenCommands { stages.append(contentsOf: [SpokenCommands(), FileNameStage()] as [any TextStage]) }
         if !dictionary.isEmpty { stages.append(DictionaryStage(entries: dictionary)) }
         return TextPipeline(stages: stages)
     }
