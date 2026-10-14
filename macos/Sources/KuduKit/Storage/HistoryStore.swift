@@ -52,7 +52,8 @@ public final class HistoryStore: ObservableObject {
     }
 
     public func append(_ record: DictationRecord) {
-        records.insert(record, at: 0)
+        let index = records.firstIndex { $0.date <= record.date } ?? records.endIndex
+        records.insert(record, at: index)
         refreshStats()
         do {
             var line = try JSONEncoder.history.encode(record)
@@ -86,7 +87,9 @@ public final class HistoryStore: ObservableObject {
             $0.text.localizedCaseInsensitiveContains(query)
         }
         let groups = Dictionary(grouping: filtered) { calendar.startOfDay(for: $0.date) }
-        return groups.keys.sorted(by: >).map { (day: $0, records: groups[$0]!) }
+        return groups.keys.sorted(by: >).map { day in
+            (day: day, records: groups[day]!.sorted { $0.date > $1.date })
+        }
     }
 
     // MARK: - Private

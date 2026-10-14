@@ -6,23 +6,28 @@ struct KuduApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
+        Window("Kudu", id: WindowID.main) {
+            MainWindow(controller: appDelegate.controller)
+        }
+        .defaultSize(width: 1040, height: 700)
+
         MenuBarExtra {
-            MenuContent(controller: appDelegate.controller)
+            MenuContent(controller: appDelegate.controller, history: appDelegate.controller.history)
         } label: {
-            MenuBarIcon(controller: appDelegate.controller)
+            MenuBarLabel(controller: appDelegate.controller)
         }
         .menuBarExtraStyle(.window)
 
-        Window("Welcome to Kudu", id: "onboarding") {
+        Window("Welcome to Kudu", id: WindowID.onboarding) {
             OnboardingView(controller: appDelegate.controller)
         }
         .windowResizability(.contentSize)
-
-        Window("Kudu Settings", id: "settings") {
-            SettingsView(store: appDelegate.controller.store)
-        }
-        .windowResizability(.contentSize)
     }
+}
+
+enum WindowID {
+    static let main = "main"
+    static let onboarding = "onboarding"
 }
 
 @MainActor
@@ -39,8 +44,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         if !Permissions.accessibilityGranted || !Permissions.microphoneGranted || controller.modelState == .missing {
-            OnboardingWindow.open()
+            Windows.open(WindowID.onboarding)
         }
+    }
+
+    /// Kudu keeps listening for the dictation key after its window is closed.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
+
+    /// Clicking the Dock icon brings the main window back.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag { Windows.open(WindowID.main) }
+        return true
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -63,31 +79,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-/// Opens the onboarding window from AppKit code (outside a SwiftUI view).
+/// Opens SwiftUI windows from AppKit code (the app delegate), which has no `openWindow`.
 @MainActor
-enum OnboardingWindow {
+enum Windows {
     static var openAction: OpenWindowAction?
 
-    static func open() {
+    static func open(_ id: String) {
         NSApp.activate(ignoringOtherApps: true)
         if let openAction {
-            openAction(id: "onboarding")
+            openAction(id: id)
         } else {
-            // The SwiftUI environment isn't wired yet on first launch; retry shortly.
+            // The SwiftUI environment isn't wired yet right after launch; retry shortly.
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(300))
-                openAction?(id: "onboarding")
+                openAction?(id: id)
             }
         }
-    }
-}
-
-struct MenuBarIcon: View {
-    @ObservedObject var controller: DictationController
-    @Environment(\.openWindow) private var openWindow
-
-    var body: some View {
-        Image(systemName: controller.isRecording ? "waveform.circle.fill" : "waveform")
-            .onAppear { OnboardingWindow.openAction = openWindow }
     }
 }

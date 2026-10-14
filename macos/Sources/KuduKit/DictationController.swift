@@ -21,9 +21,8 @@ public final class DictationController: ObservableObject {
     /// Key-up → text inserted, in milliseconds, for the most recent dictation.
     @Published public private(set) var lastLatencyMs: Int?
     @Published public private(set) var hotkeyActive = false
-    /// Most recent first, capped at `historyLimit`.
-    @Published public private(set) var history: [HistoryItem] = []
-    public var historyLimit = 25
+    /// Speech recognized, now cleaning up / formatting.
+    @Published public private(set) var isTranscribing = false
 
     @Published public var trigger: TriggerKey {
         didSet {
@@ -65,6 +64,13 @@ public final class DictationController: ObservableObject {
     private let sounds = SoundCues()
     private let fnGuard = FnKeyGuard()
     public let store: UserDataStore
+    /// Dictation history and stats, saved on this Mac.
+    public let history: HistoryStore
+    private let formatter = SmartFormatter()
+    /// Live voice levels, shared with the menu-bar icon.
+    public var levels: OverlayModel { overlay.model }
+    /// Whether this Mac can run smart formatting (macOS 26+ with Apple Intelligence).
+    public var smartFormattingAvailable: Bool { formatter.isAvailable }
     private var recordingStartedAt: ContinuousClock.Instant?
     private var transcriptionTask: Task<Void, Never>?
     private var lastShortTapAt: ContinuousClock.Instant?
@@ -85,8 +91,9 @@ public final class DictationController: ObservableObject {
         static let preventEmojiPicker = "preventEmojiPicker"
     }
 
-    public init(store: UserDataStore = UserDataStore()) {
+    public init(store: UserDataStore = UserDataStore(), history: HistoryStore = HistoryStore()) {
         self.store = store
+        self.history = history
         let defaults = UserDefaults.standard
         let trigger = defaults.string(forKey: Keys.trigger).flatMap(TriggerKey.init(rawValue:)) ?? .fn
         self.trigger = trigger
@@ -116,6 +123,7 @@ public final class DictationController: ObservableObject {
         if case .missing = modelState, ParakeetEngine.isDownloaded {
             Task { await loadModel() }
         }
+        if store.cleanup.smartFormatting != .off { formatter.prewarm() }
     }
 
     /// Plays the overlay through every state with a synthetic voice-like signal, so its look
@@ -189,19 +197,13 @@ public final class DictationController: ObservableObject {
     // MARK: - History
 
     /// Types a previous result at the cursor again (e.g. after it went to the wrong window).
-    public func reinsert(_ item: HistoryItem, raw: Bool = false) {
-        Task { await inserter.insert(raw ? item.raw : item.text) }
+    public func reinsert(_ record: DictationRecord, raw: Bool = false) {
+        Task { await inserter.insert(raw ? record.raw : record.text) }
     }
 
-    public func copyToClipboard(_ item: HistoryItem, raw: Bool = false) {
+    public func copyToClipboard(_ record: DictationRecord, raw: Bool = false) {
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(raw ? item.raw : item.text, forType: .string)
-    }
-
-    public func clearHistory() {
-        history.removeAll()
-        lastTranscript = ""
-        lastLatencyMs = nil
+        NSPasteboard.general.setString(raw ? record.raw : record.text, forType: .string)
     }
 
     // MARK: - Hotkey flow
@@ -310,43 +312,61 @@ public final class DictationController: ObservableObject {
         }
 
         overlay.show(.transcribing)
+        isTranscribing = true
         sounds.playStop()
         let releasedAt = ContinuousClock.now
-        let category = AppContext.frontmostCategory()
-        let precedingCharacter = inserter.precedingCharacter()
+        let frontmost = NSWorkspace.shared.frontmostApplication?.bundleIdentifier
+        let category = AppContext.category(for: frontmost)
+        let context = TextContext(category: category, precedingCharacter: inserter.precedingCharacter())
+        let settings = store.cleanup
         // Read the clipboard now, on the main thread, and only if a snippet can use it.
         let clipboardText = store.snippets.contains { $0.expansion.contains("{clipboard}") }
             ? NSPasteboard.general.string(forType: .string) : nil
-        let pipeline = TextPipeline.standard(
-            settings: store.cleanup,
-            dictionary: store.dictionary,
-            snippets: store.snippets,
-            clipboard: { clipboardText }
-        )
+        let snippets = SnippetStage(snippets: store.snippets, clipboard: { clipboardText })
+        let before = TextPipeline.beforeFormatting(settings: settings, dictionary: store.dictionary)
+        let after = TextPipeline.afterFormatting(settings: settings)
+        let terms = store.dictionary.map(\.written)
+        let audioSeconds = Double(samples.count) / AudioRecorder.sampleRate
 
-        transcriptionTask = Task { [engine, signposter] in
-            defer { self.transcriptionTask = nil }
+        transcriptionTask = Task { [engine, formatter, signposter] in
+            defer {
+                self.transcriptionTask = nil
+                self.isTranscribing = false
+            }
             let interval = signposter.beginInterval("dictation")
             do {
                 let raw = try await engine.transcribe(samples)
-                let text = pipeline.process(
-                    raw, context: TextContext(category: category, precedingCharacter: precedingCharacter)
-                )
+                var text: String
+                var formatted = false
+                if let expansion = snippets.match(raw) {
+                    text = expansion
+                } else {
+                    text = before.process(raw, context: context)
+                    // Code editors and terminals get the rule cleanup only: no prose formatting.
+                    if category != .code, settings.smartFormatting.applies(toWordCount: WordCount.count(text)),
+                       let result = await formatter.format(text, category: category, terms: terms) {
+                        text = result
+                        formatted = true
+                    }
+                }
+                text = after.process(text, context: context)
+
                 self.overlay.hide()
                 if !text.isEmpty {
                     let method = await self.inserter.insert(text)
                     self.log.debug("Inserted via \(method.rawValue)")
                 }
-                self.lastTranscript = text
                 let latency = Int((ContinuousClock.now - releasedAt) / .milliseconds(1))
+                self.lastTranscript = text
                 self.lastLatencyMs = latency
                 if !text.isEmpty {
-                    self.history.insert(HistoryItem(date: .now, raw: raw, text: text, latencyMs: latency), at: 0)
-                    if self.history.count > self.historyLimit { self.history.removeLast() }
+                    self.history.append(DictationRecord(
+                        raw: raw, text: text, audioSeconds: audioSeconds, latencyMs: latency,
+                        bundleID: frontmost, formatted: formatted
+                    ))
                 }
-                let audioSeconds = Double(samples.count) / AudioRecorder.sampleRate
                 self.log.info(
-                    "Dictation: \(audioSeconds, format: .fixed(precision: 1))s audio → \(self.lastLatencyMs ?? 0) ms"
+                    "Dictation: \(audioSeconds, format: .fixed(precision: 1))s audio → \(latency) ms (formatted: \(formatted))"
                 )
             } catch {
                 self.log.error("Transcription failed: \(error.localizedDescription)")

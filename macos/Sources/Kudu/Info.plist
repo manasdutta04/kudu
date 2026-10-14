@@ -26,8 +26,6 @@
 	<string>14.0</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.productivity</string>
-	<key>LSUIElement</key>
-	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Kudu listens only while you hold the dictation key, and transcribes on this Mac.</string>
 	<key>NSHumanReadableCopyright</key>
