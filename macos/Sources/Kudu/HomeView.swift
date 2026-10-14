@@ -48,7 +48,7 @@ struct HomeView: View {
             }
 
             if groups.isEmpty {
-                EmptyHistory(searching: !search.query.isEmpty, hint: controller.recordingMode.hint(for: controller.trigger))
+                EmptyHistory(searching: !search.query.isEmpty, hint: controller.recordingMode.hint(for: controller.shortcuts.dictate))
             }
             ForEach(groups, id: \.day) { group in
                 Text(Self.dayTitle(group.day))
@@ -112,16 +112,16 @@ private struct HeroCard: View {
                     .font(Theme.display(25))
                     .foregroundStyle(.white)
                 VStack(alignment: .leading, spacing: 7) {
-                    GestureHint(keys: "Hold \(controller.trigger.shortName)", text: "dictate")
+                    GestureHint(keys: "Hold \(controller.shortcuts.dictate.displayName)", text: "dictate")
                     if controller.recordingMode != .holdOnly {
                         GestureHint(
                             keys: controller.recordingMode == .tapToToggle
-                                ? "Tap \(controller.trigger.shortName)" : "Double-tap \(controller.trigger.shortName)",
+                                ? "Tap \(controller.shortcuts.dictate.displayName)" : "Double-tap \(controller.shortcuts.dictate.displayName)",
                             text: "hands-free"
                         )
                     }
-                    if controller.trigger == .fn {
-                        GestureHint(keys: "fn + ⌃", text: "command: rewrite, translate, draft")
+                    if let command = controller.shortcuts.command {
+                        GestureHint(keys: command.displayName, text: "command: rewrite, translate, draft")
                     }
                 }
             }

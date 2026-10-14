@@ -85,13 +85,13 @@ struct MenuContent: View {
 
         Button("Open Kudu") { show(.home) }
         Button("Paste last transcript") { controller.pasteLastTranscript() }
-            .keyboardShortcut("v", modifiers: [.control, .command])
+            .keyboardShortcut(Self.menuShortcut(controller.shortcuts.pasteLast))
             .disabled(history.records.isEmpty)
 
         Divider()
 
-        Picker("Dictation key", selection: $controller.trigger) {
-            ForEach(TriggerKey.allCases) { Text($0.displayName).tag($0) }
+        Picker("Dictation key", selection: $controller.dictateShortcut) {
+            ForEach(Self.dictationChoices(current: controller.shortcuts.dictate), id: \.self) { Text($0.displayName).tag($0) }
         }
         Picker("Recording", selection: $controller.recordingMode) {
             ForEach(RecordingMode.allCases) { Text($0.title).tag($0) }
@@ -119,6 +119,30 @@ struct MenuContent: View {
             .keyboardShortcut("q", modifiers: .command)
     }
 
+    /// The paste-last shortcut shown at the right of the menu item, when SwiftUI can show it.
+    static func menuShortcut(_ shortcut: KeyShortcut?) -> KeyboardShortcut? {
+        guard let shortcut, let label = shortcut.keyLabel, label.count == 1, !shortcut.contains(.fn),
+              let character = label.lowercased().first
+        else { return nil }
+        var modifiers: EventModifiers = []
+        for modifier in shortcut.modifiers {
+            switch modifier.kind {
+            case .control: modifiers.insert(.control)
+            case .option: modifiers.insert(.option)
+            case .shift: modifiers.insert(.shift)
+            case .command: modifiers.insert(.command)
+            case .fn: break
+            }
+        }
+        return KeyboardShortcut(KeyEquivalent(character), modifiers: modifiers)
+    }
+
+    /// The usual dictation keys, plus a custom one recorded in Settings.
+    static func dictationChoices(current: KeyShortcut) -> [KeyShortcut] {
+        let presets: [KeyShortcut] = [.fn, .rightCommand, .rightOption]
+        return presets.contains(current) ? presets : presets + [current]
+    }
+
     private func show(_ page: Page) {
         navigation.page = page
         NSApp.activate(ignoringOtherApps: true)
@@ -128,7 +152,7 @@ struct MenuContent: View {
     private var status: String {
         switch controller.modelState {
         case .ready where controller.hotkeyActive:
-            "Kudu is ready · hold \(controller.trigger.shortName) to dictate"
+            "Kudu is ready · hold \(controller.shortcuts.dictate.displayName) to dictate"
         case .ready: "Kudu needs Accessibility permission"
         case .downloading(let fraction): "Downloading speech model… \(Int(fraction * 100))%"
         case .loading: "Loading speech model…"

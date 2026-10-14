@@ -1,4 +1,5 @@
 import Foundation
+import KuduCore
 
 /// How the dictation key starts and stops recording.
 public enum RecordingMode: String, CaseIterable, Sendable, Codable, Identifiable {
@@ -19,11 +20,19 @@ public enum RecordingMode: String, CaseIterable, Sendable, Codable, Identifiable
         }
     }
 
-    public func hint(for key: TriggerKey) -> String {
-        switch self {
-        case .holdOrDoubleTap: "Hold \(key.displayName) and speak, or double-tap it to talk hands-free."
-        case .tapToToggle: "Tap \(key.displayName) to start, tap again to finish."
-        case .holdOnly: "Hold \(key.displayName), speak, release."
+    public func hint(for shortcut: KeyShortcut) -> String {
+        let key = shortcut.displayName
+        return switch self {
+        case .holdOrDoubleTap: "Hold \(key) and speak, or double-tap it to talk hands-free."
+        case .tapToToggle: "Tap \(key) to start, tap again to finish."
+        case .holdOnly: "Hold \(key), speak, release."
         }
     }
+}
+
+/// The shortcuts that can be changed in Settings.
+public enum ShortcutSlot: String, CaseIterable, Sendable, Identifiable {
+    case dictate, command, pasteLast
+
+    public var id: String { rawValue }
 }

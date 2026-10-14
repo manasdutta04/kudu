@@ -499,43 +499,54 @@ struct SettingsPage: View {
             PageHeader(title: "Settings", subtitle: "Keys, sounds, privacy and Command mode.")
 
             Section(title: "Dictation") {
-                Row(title: "Dictation key") {
-                    ValueMenu($controller.trigger) { $0.displayName }
-                }
-                Row(title: "Recording", detail: controller.recordingMode.hint(for: controller.trigger)) {
+                Row(title: "Recording", detail: controller.recordingMode.hint(for: controller.shortcuts.dictate)) {
                     ValueMenu($controller.recordingMode) { $0.title }
                 }
-                Row(title: "Microphone", detail: "Kudu opens it only while you dictate.") {
+                Row(title: "Microphone", detail: "Kudu opens it only while you dictate.", divider: controller.shortcuts.usesFn) {
                     ValueMenu(
                         items: [MicrophoneChoice(uid: nil, name: "System default")]
                             + controller.microphones.map { MicrophoneChoice(uid: $0.uid, name: $0.name) },
                         selection: $controller.microphoneUID, value: \.uid, title: \.name
                     )
                 }
-                if controller.trigger == .fn {
+                if controller.shortcuts.usesFn {
                     Row(title: "Stop fn from opening the emoji picker", detail: "Only while Kudu is running.", divider: false) {
                         AccentSwitch(isOn: $controller.preventEmojiPicker)
                     }
                 }
             }
 
-            Section(title: "Shortcuts") {
-                ShortcutRow(title: "Dictate", keys: [controller.trigger.shortName], prefix: "Hold")
+            Section(
+                title: "Shortcuts",
+                footer: "Click Change, then press the keys you want. Modifier keys alone (fn, Right ⌥, ⌃⌥) are held to talk; or use a key with modifiers, like ⌥Space."
+            ) {
+                EditableShortcutRow(title: "Dictate", detail: "Hold to talk", slot: .dictate, controller: controller)
                 if controller.recordingMode != .holdOnly {
                     ShortcutRow(
                         title: "Hands-free",
-                        keys: [controller.trigger.shortName],
+                        keys: controller.shortcuts.dictate.keycaps,
                         prefix: controller.recordingMode == .tapToToggle ? "Tap" : "Double-tap"
                     )
                 }
-                if controller.trigger == .fn {
-                    ShortcutRow(title: "Command mode", keys: ["fn", "⌃"], prefix: "Hold")
+                EditableShortcutRow(
+                    title: "Command mode", detail: "Hold and say what to do with the selected text", slot: .command,
+                    controller: controller
+                )
+                EditableShortcutRow(title: "Paste last transcript", detail: nil, slot: .pasteLast, controller: controller)
+                ShortcutRow(title: "Cancel", keys: ["esc"], prefix: "While dictating", divider: controller.shortcuts != .defaults || controller.shortcutError != nil)
+                if let error = controller.shortcutError {
+                    Row(title: error, divider: controller.shortcuts != .defaults) {
+                        Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                    }
                 }
-                ShortcutRow(title: "Paste last transcript", keys: ["⌃", "⌘", "V"])
-                ShortcutRow(title: "Cancel", keys: ["esc"], prefix: "While dictating", divider: false)
+                if controller.shortcuts != .defaults {
+                    Row(title: "Restore the default shortcuts", detail: "fn to dictate, fn ⌃ for Command mode, ⌃⌘V to paste the last transcript.", divider: false) {
+                        Button("Restore") { controller.resetShortcuts() }.buttonStyle(QuietButtonStyle())
+                    }
+                }
             }
 
-            Section(title: "Memory", footer: "After a dictation Kudu watches the field for up to 45 seconds. If you fix a name or term it misspelled, it remembers it. Only the word is saved, on this Mac.") {
+            Section(title: "Memory", footer: "After a dictation Kudu watches the field for up to 60 seconds. If you fix a name or term it misspelled, it remembers it. Only the word is saved, on this Mac.") {
                 Row(title: "Learn from my corrections", detail: "Learned words appear in the Dictionary with ✦.", divider: false) {
                     AccentSwitch(isOn: $controller.learnFromCorrections)
                 }
@@ -543,7 +554,7 @@ struct SettingsPage: View {
 
             Section(title: "Command mode") {
                 Row(
-                    title: "Select text, hold fn + ⌃ and say what to do",
+                    title: "Select text, hold \(controller.shortcuts.command?.displayName ?? "the Command shortcut") and say what to do",
                     detail: "“Make this more formal” · “Translate to Hindi” · “Fix the grammar” · “Summarize”. With nothing selected, Kudu writes it: “Write a polite reply saying I'll be late.”",
                     divider: false
                 ) {
@@ -620,6 +631,49 @@ private struct ShortcutRow: View {
     var body: some View {
         Row(title: title, divider: divider) {
             Shortcut(keys: keys, prefix: prefix)
+        }
+    }
+}
+
+/// A shortcut with a Change button. While recording, it shows the keys held so far.
+private struct EditableShortcutRow: View {
+    let title: String
+    let detail: String?
+    let slot: ShortcutSlot
+    @ObservedObject var controller: DictationController
+
+    private var shortcut: KeyShortcut? {
+        switch slot {
+        case .dictate: controller.shortcuts.dictate
+        case .command: controller.shortcuts.command
+        case .pasteLast: controller.shortcuts.pasteLast
+        }
+    }
+
+    var body: some View {
+        Row(title: title, detail: detail) {
+            HStack(spacing: 10) {
+                if controller.recordingShortcut == slot {
+                    HStack(spacing: 4) {
+                        if controller.recordingPreview.isEmpty {
+                            Text("Press keys…").font(.system(size: 12.5)).foregroundStyle(Theme.accent)
+                        } else {
+                            ForEach(Array(controller.recordingPreview.enumerated()), id: \.offset) { _, key in KeyCap(label: key) }
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .frame(minHeight: 28)
+                    .overlay(Capsule().strokeBorder(Theme.accent.opacity(0.7), lineWidth: 1))
+                    Button("Cancel") { controller.cancelShortcutRecording() }.buttonStyle(QuietButtonStyle())
+                } else {
+                    if let shortcut {
+                        Shortcut(keys: shortcut.keycaps)
+                    } else {
+                        Text("Off").font(.system(size: 12.5)).foregroundStyle(.secondary)
+                    }
+                    Button("Change") { controller.recordShortcut(slot) }.buttonStyle(QuietButtonStyle())
+                }
+            }
         }
     }
 }

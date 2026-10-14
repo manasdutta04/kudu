@@ -32,7 +32,7 @@ struct SetupCard: View {
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Finish setting up").font(.system(size: 17, weight: .semibold))
-                        Text("Three quick steps, then hold \(controller.trigger.displayName) anywhere to dictate. Everything stays on your Mac.")
+                        Text("Three quick steps, then hold \(controller.shortcuts.dictate.displayName) anywhere to dictate. Everything stays on your Mac.")
                             .font(.callout).foregroundStyle(.secondary)
                     }
                     SetupStep(number: 1, title: "Microphone", detail: "To hear you while you dictate.", done: state.microphone) {

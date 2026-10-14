@@ -1,72 +1,31 @@
 import AppKit
 @preconcurrency import CoreFoundation
 import CoreGraphics
+import KuduCore
 import os
 
-/// A single key that triggers dictation while held.
-public enum TriggerKey: String, CaseIterable, Sendable, Codable, Identifiable {
-    case fn
-    case rightCommand
-    case rightOption
-
-    public var id: String { rawValue }
-
-    public var displayName: String {
-        switch self {
-        case .fn: "fn (Globe)"
-        case .rightCommand: "Right ⌘"
-        case .rightOption: "Right ⌥"
-        }
-    }
-
-    /// Compact label for key hints ("Hold fn").
-    public var shortName: String {
-        switch self {
-        case .fn: "fn"
-        case .rightCommand: "Right ⌘"
-        case .rightOption: "Right ⌥"
-        }
-    }
-
-    var keyCode: Int64 {
-        switch self {
-        case .fn: 63          // kVK_Function
-        case .rightCommand: 54 // kVK_RightCommand
-        case .rightOption: 61  // kVK_RightOption
-        }
-    }
-
-    /// Whether this key is down according to the event's flags. Right-side modifiers use the
-    /// device-dependent bits (NX_DEVICERCMDKEYMASK / NX_DEVICERALTKEYMASK) so the left key
-    /// being held doesn't confuse us.
-    func isDown(in flags: CGEventFlags) -> Bool {
-        switch self {
-        case .fn: flags.contains(.maskSecondaryFn)
-        case .rightCommand: flags.rawValue & 0x10 != 0
-        case .rightOption: flags.rawValue & 0x40 != 0
-        }
-    }
-}
-
+/// What the user did with their shortcuts.
 public enum HotkeyEvent: Sendable {
-    /// Trigger key went down on its own.
+    /// The dictation shortcut went down.
     case pressed
-    /// Trigger key released after a normal hold.
+    /// The dictation shortcut was released after a normal hold.
     case released
     /// The hold turned out to be part of a shortcut (another key was pressed), or Escape was hit.
     case cancelled
-    /// Trigger + ⌃ held together: Command mode (speak an instruction for the selected text).
+    /// The Command mode shortcut went down (or the dictation hold became one).
     case commandPressed
-    /// The trigger was released after `commandPressed`.
+    /// The Command mode shortcut was released.
     case commandReleased
-    /// ⌃⌘V: paste the last transcript again.
+    /// The paste-last shortcut (⌃⌘V by default): paste the last transcript again.
     case pasteLast
 }
 
-/// Watches the trigger key with a CGEventTap at session level.
+/// Watches the keyboard with a CGEventTap and recognizes the user's shortcuts (`ShortcutSet`,
+/// matched by `ShortcutMatcher` in KuduCore, the same logic as on Windows and Linux).
 ///
-/// The tap is active (not listen-only) so it can swallow events: Escape while dictating, and
-/// — when fn is the dictation key — the fn press and release themselves. macOS turns an fn
+/// The tap is active (not listen-only) so it can swallow events: Escape while dictating, the
+/// key of a key-based shortcut, everything while a new shortcut is being recorded, and — when
+/// fn is part of a shortcut — the fn press and release themselves. macOS turns an fn
 /// press/release pair it sees into the 🌐 action (emoji picker, input source switch). Letting
 /// the press through but not the release is worse: the system is left thinking fn is held,
 /// and the *next* fn event completes a "tap". So both halves are hidden from the system.
@@ -77,17 +36,13 @@ public enum HotkeyEvent: Sendable {
 /// Decisions are made on the tap thread; events are delivered to `onEvent` on the main thread.
 public final class HotkeyMonitor: @unchecked Sendable {
     private struct State {
-        var trigger: TriggerKey
-        var isDictating = false
-        var triggerDown = false
-        var triggerDownAt: TimeInterval = 0
-        /// Trigger + ⌃ is held: the hold is a Command mode instruction.
-        var commandActive = false
-        /// The physical fn key is down. Tracked separately from `triggerDown` because a hold can
-        /// be cancelled (Escape, a shortcut) while fn is still held, and its release must still
-        /// be swallowed.
+        var matcher: ShortcutMatcher
+        /// Recording a new shortcut from Settings: keys go here instead of the matcher.
+        var recorder: ShortcutRecorder?
+        /// The physical fn key is down. Tracked from its own key events, because other events
+        /// carry the fn flag for arrows and F-keys too.
         var fnDown = false
-        /// Hide fn from the rest of the system while it is the dictation key.
+        /// Hide fn from the rest of the system while it is part of a shortcut.
         var suppressFn = true
         /// fn was combined with a real key (fn+arrow, fn+F…): the user wants a system shortcut,
         /// so stop hiding fn for the rest of this press.
@@ -95,8 +50,9 @@ public final class HotkeyMonitor: @unchecked Sendable {
         /// Events whose fn flag was removed during the current press (for diagnostics).
         var strippedCount = 0
 
+        var hidesFn: Bool { (matcher.shortcuts.usesFn && suppressFn) || recorder != nil }
         /// fn is physically held as a lone key and must stay invisible to the system.
-        var isHidingFn: Bool { fnDown && !fnCombo && trigger == .fn && suppressFn }
+        var isHidingFn: Bool { fnDown && !fnCombo && hidesFn }
     }
 
     /// What the tap callback should do with an event.
@@ -110,13 +66,16 @@ public final class HotkeyMonitor: @unchecked Sendable {
     private let state: OSAllocatedUnfairLock<State>
     /// Called on the main thread.
     @MainActor public var onEvent: ((HotkeyEvent) -> Void)?
+    /// While recording: the keys held so far, then the result (nil when cancelled).
+    @MainActor private var onRecordingPreview: (([String]) -> Void)?
+    @MainActor private var onRecorded: ((KeyShortcut?) -> Void)?
 
-    public var trigger: TriggerKey {
-        get { state.withLock { $0.trigger } }
-        set { state.withLock { $0.trigger = newValue; $0.triggerDown = false } }
+    public var shortcuts: ShortcutSet {
+        get { state.withLock { $0.matcher.shortcuts } }
+        set { state.withLock { $0.matcher.shortcuts = newValue } }
     }
 
-    /// When fn is the trigger, keep the system from seeing fn presses (no emoji picker).
+    /// When fn is part of a shortcut, keep the system from seeing fn presses (no emoji picker).
     public var suppressFn: Bool {
         get { state.withLock { $0.suppressFn } }
         set { state.withLock { $0.suppressFn = newValue } }
@@ -124,22 +83,47 @@ public final class HotkeyMonitor: @unchecked Sendable {
 
     /// Set by the owner while a dictation is in progress, so Escape can be swallowed.
     public var isDictating: Bool {
-        get { state.withLock { $0.isDictating } }
-        set { state.withLock { $0.isDictating = newValue } }
+        get { state.withLock { $0.matcher.isDictating } }
+        set { state.withLock { $0.matcher.isDictating = newValue } }
     }
 
-    /// A second modifier joining within this window makes a chord: ⌃ means Command mode, the
-    /// others mean a system shortcut (not dictation).
-    private let chordWindow: TimeInterval = 0.3
-    private static let controlKeyCodes: Set<Int64> = [59, 62] // left, right ⌃
+    private static let fnKeyCode: Int64 = 63
     private let log = Logger(subsystem: "app.kudu", category: "hotkey")
 
     // Owned by start()/stop() on the main thread and read by the tap thread after start.
     nonisolated(unsafe) private var tap: CFMachPort?
     nonisolated(unsafe) private var tapRunLoop: CFRunLoop?
 
-    public init(trigger: TriggerKey) {
-        state = OSAllocatedUnfairLock(initialState: State(trigger: trigger))
+    public init(shortcuts: ShortcutSet) {
+        state = OSAllocatedUnfairLock(initialState: State(matcher: ShortcutMatcher(shortcuts: shortcuts)))
+    }
+
+    /// The next key combination pressed is recorded instead of matched (and hidden from other
+    /// apps). `preview` shows the keys held so far; `done` gets the result, or nil if cancelled.
+    @MainActor
+    public func recordShortcut(preview: @escaping ([String]) -> Void, done: @escaping (KeyShortcut?) -> Void) {
+        onRecordingPreview = preview
+        onRecorded = done
+        state.withLock { $0.recorder = ShortcutRecorder() }
+    }
+
+    @MainActor
+    public func cancelRecording() {
+        let wasRecording = state.withLock { state -> Bool in
+            defer { state.recorder = nil }
+            return state.recorder != nil
+        }
+        if wasRecording { finishRecording(nil) }
+    }
+
+    @MainActor
+    private func finishRecording(_ shortcut: KeyShortcut?) {
+        var shortcut = shortcut
+        if let code = shortcut?.keyCode { shortcut?.keyLabel = KeyboardLayout.label(for: code) }
+        let done = onRecorded
+        onRecorded = nil
+        onRecordingPreview = nil
+        done?(shortcut)
     }
 
     /// Returns false when the tap could not be created (usually: Accessibility not granted yet).
@@ -197,11 +181,35 @@ public final class HotkeyMonitor: @unchecked Sendable {
         if let tapRunLoop { CFRunLoopStop(tapRunLoop) }
         tap = nil
         tapRunLoop = nil
-        state.withLock { $0.triggerDown = false; $0.fnDown = false }
+        state.withLock { state in
+            state.fnDown = false
+            state.matcher.shortcuts = state.matcher.shortcuts // forgets any hold in progress
+        }
+    }
+
+    /// The physical modifier keys held, with their sides, from an event's flags. The
+    /// device-dependent bits tell left from right; fn comes from its own key events.
+    static func heldModifiers(_ flags: CGEventFlags, fnDown: Bool) -> [ModifierKey] {
+        let raw = flags.rawValue
+        var held: [ModifierKey] = fnDown ? [ModifierKey(.fn)] : []
+        let pairs: [(ModifierKind, CGEventFlags, UInt64, UInt64)] = [
+            (.control, .maskControl, 0x0001, 0x2000),
+            (.option, .maskAlternate, 0x0020, 0x0040),
+            (.shift, .maskShift, 0x0002, 0x0004),
+            (.command, .maskCommand, 0x0008, 0x0010),
+        ]
+        for (kind, mask, leftBit, rightBit) in pairs where flags.contains(mask) {
+            let left = raw & leftBit != 0
+            let right = raw & rightBit != 0
+            if left || !right { held.append(ModifierKey(kind, side: .left)) }
+            if right { held.append(ModifierKey(kind, side: .right)) }
+        }
+        return held
     }
 
     /// Runs on the tap thread for every event and must return quickly.
-    fileprivate func handle(type: CGEventType, keyCode: Int64, flags: CGEventFlags) -> Disposition {
+    fileprivate func handle(type: CGEventType, keyCode: Int64, flags: CGEventFlags, isRepeat: Bool) -> Disposition {
+        let now = ProcessInfo.processInfo.systemUptime
         switch type {
         case .tapDisabledByTimeout, .tapDisabledByUserInput:
             log.info("Event tap was disabled (\(type.rawValue)); re-enabling")
@@ -209,36 +217,35 @@ public final class HotkeyMonitor: @unchecked Sendable {
             return .pass
 
         case .flagsChanged:
-            return handleFlagsChanged(keyCode: keyCode, flags: flags)
+            return handleFlagsChanged(keyCode: keyCode, flags: flags, now: now)
 
         case .keyDown:
-            let (disposition, events) = state.withLock { state -> (Disposition, [HotkeyEvent]) in
-                // ⌃⌘V anywhere: paste the last transcript again (swallowed, so the app doesn't
-                // also receive a ⌃⌘V of its own).
-                if keyCode == 9 /* kVK_ANSI_V */, flags.contains(.maskControl), flags.contains(.maskCommand),
-                   !flags.contains(.maskShift), !flags.contains(.maskAlternate), !state.triggerDown {
-                    return (.swallow, [.pasteLast])
-                }
-                if keyCode == 53 /* kVK_Escape */, state.isDictating {
-                    state.triggerDown = false
-                    state.commandActive = false
-                    return (.swallow, [.cancelled])
-                }
-                var events: [HotkeyEvent] = []
-                // Any regular key while the trigger is held means the user is typing a shortcut.
-                if state.triggerDown {
-                    state.triggerDown = false
-                    state.commandActive = false
-                    events.append(.cancelled)
-                }
+            let (disposition, events, recorded) = state.withLock { state -> (Disposition, [ShortcutEvent], ShortcutRecorder.Result?) in
                 if state.fnDown { state.fnCombo = true }
-                return (.pass, events)
+                if var recorder = state.recorder {
+                    let result = recorder.keyDown(Int(keyCode), label: nil)
+                    state.recorder = nil
+                    return (.swallow, [], result)
+                }
+                let outcome = state.matcher.keyDown(Int(keyCode), isRepeat: isRepeat, at: now)
+                return (outcome.swallow ? .swallow : .pass, outcome.events, nil)
             }
             emit(events)
+            if let recorded { emitRecording(recorded, preview: nil) }
+            return disposition
+
+        case .keyUp:
+            let disposition = state.withLock { state -> Disposition in
+                if state.recorder != nil { return .swallow }
+                if state.matcher.keyUp(Int(keyCode), at: now).swallow { return .swallow }
+                guard flags.contains(.maskSecondaryFn), state.isHidingFn else { return .pass }
+                state.strippedCount += 1
+                return .stripFn
+            }
             return disposition
 
         default:
-            // Mouse, scroll, gestures, key up…: hide the fn flag during a lone fn press.
+            // Mouse, scroll, gestures…: hide the fn flag during a lone fn press.
             guard flags.contains(.maskSecondaryFn) else { return .pass }
             return state.withLock { state in
                 guard state.isHidingFn else { return .pass }
@@ -248,28 +255,27 @@ public final class HotkeyMonitor: @unchecked Sendable {
         }
     }
 
-    private func handleFlagsChanged(keyCode: Int64, flags: CGEventFlags) -> Disposition {
-        let isFnKey = keyCode == TriggerKey.fn.keyCode
-        let (disposition, events, note) = state.withLock { state -> (Disposition, [HotkeyEvent], String?) in
-            var events: [HotkeyEvent] = []
+    private func handleFlagsChanged(keyCode: Int64, flags: CGEventFlags, now: TimeInterval) -> Disposition {
+        let isFnKey = keyCode == Self.fnKeyCode
+        let (disposition, events, recorded, preview, note) = state.withLock {
+            state -> (Disposition, [ShortcutEvent], ShortcutRecorder.Result?, [String]?, String?) in
             var disposition = Disposition.pass
             var note: String?
 
             if isFnKey {
                 let down = flags.contains(.maskSecondaryFn)
-                let hiding = state.trigger == .fn && state.suppressFn
                 if down && !state.fnDown {
                     state.fnDown = true
                     state.fnCombo = false
                     state.strippedCount = 0
-                    if hiding { disposition = .swallow }
+                    if state.hidesFn { disposition = .swallow }
                 } else if !down && state.fnDown {
                     state.fnDown = false
                     // After a combo the system has already seen fn (on the key event), so let the
                     // release through to keep its modifier state right; a combo is never a 🌐 tap.
-                    if hiding && !state.fnCombo { disposition = .swallow }
+                    if state.hidesFn && !state.fnCombo { disposition = .swallow }
                     note = "fn press ended: swallowed=\(disposition == .swallow) combo=\(state.fnCombo) stripped=\(state.strippedCount)"
-                } else if hiding && !state.fnCombo {
+                } else if state.hidesFn && !state.fnCombo {
                     disposition = .swallow
                 }
             } else if flags.contains(.maskSecondaryFn), state.isHidingFn {
@@ -278,54 +284,54 @@ public final class HotkeyMonitor: @unchecked Sendable {
                 disposition = .stripFn
             }
 
-            guard keyCode == state.trigger.keyCode else {
-                let justPressed = ProcessInfo.processInfo.systemUptime - state.triggerDownAt < chordWindow
-                if Self.controlKeyCodes.contains(keyCode), flags.contains(.maskControl) {
-                    // ⌃ joined the trigger right after it went down: Command mode.
-                    if state.triggerDown, justPressed, !state.commandActive {
-                        state.commandActive = true
-                        events.append(.commandPressed)
-                    }
-                } else if state.triggerDown, justPressed, !state.commandActive, flags.contains(.maskCommand) || flags.contains(.maskShift) || flags.contains(.maskAlternate) {
-                    // Another modifier joined the trigger: a system shortcut, not dictation.
-                    state.triggerDown = false
-                    events.append(.cancelled)
-                }
-                return (disposition, events, note)
+            let held = Self.heldModifiers(flags, fnDown: state.fnDown)
+            if var recorder = state.recorder {
+                let result = recorder.modifiersChanged(held)
+                state.recorder = result == .pending ? recorder : nil
+                return (disposition, [], result == .pending ? nil : result, recorder.preview, note)
             }
-            let isDown = state.trigger.isDown(in: flags)
-            if isDown && !state.triggerDown {
-                state.triggerDown = true
-                state.triggerDownAt = ProcessInfo.processInfo.systemUptime
-                // ⌃ already held when the trigger goes down: Command mode straight away.
-                if flags.contains(.maskControl) {
-                    state.commandActive = true
-                    events.append(.commandPressed)
-                } else {
-                    events.append(.pressed)
-                }
-            } else if !isDown && state.triggerDown {
-                state.triggerDown = false
-                if state.commandActive {
-                    state.commandActive = false
-                    events.append(.commandReleased)
-                } else {
-                    events.append(.released)
-                }
-            }
-            return (disposition, events, note)
+            let outcome = state.matcher.modifiersChanged(held, at: now)
+            return (disposition, outcome.events, nil, nil, note)
         }
         if let note { log.info("\(note, privacy: .public)") }
         emit(events)
+        if recorded != nil || preview != nil { emitRecording(recorded, preview: preview) }
         return disposition
     }
 
-    private func emit(_ events: [HotkeyEvent]) {
+    private func emit(_ events: [ShortcutEvent]) {
         guard !events.isEmpty else { return }
         DispatchQueue.main.async { [weak self] in
             MainActor.assumeIsolated {
-                for event in events { self?.onEvent?(event) }
+                for event in events { self?.onEvent?(HotkeyEvent(event)) }
             }
+        }
+    }
+
+    private func emitRecording(_ result: ShortcutRecorder.Result?, preview: [String]?) {
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if let preview { self.onRecordingPreview?(preview) }
+                switch result {
+                case .done(let shortcut): self.finishRecording(shortcut)
+                case .cancelled: self.finishRecording(nil)
+                case .pending, nil: break
+                }
+            }
+        }
+    }
+}
+
+extension HotkeyEvent {
+    init(_ event: ShortcutEvent) {
+        switch event {
+        case .pressed: self = .pressed
+        case .released: self = .released
+        case .cancelled: self = .cancelled
+        case .commandPressed: self = .commandPressed
+        case .commandReleased: self = .commandReleased
+        case .pasteLast: self = .pasteLast
         }
     }
 }
@@ -339,7 +345,8 @@ private func hotkeyTapCallback(
     guard let refcon else { return Unmanaged.passUnretained(event) }
     let monitor = Unmanaged<HotkeyMonitor>.fromOpaque(refcon).takeUnretainedValue()
     let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-    switch monitor.handle(type: type, keyCode: keyCode, flags: event.flags) {
+    let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+    switch monitor.handle(type: type, keyCode: keyCode, flags: event.flags, isRepeat: isRepeat) {
     case .pass:
         return Unmanaged.passUnretained(event)
     case .swallow:

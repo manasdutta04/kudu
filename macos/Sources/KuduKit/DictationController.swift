@@ -24,14 +24,33 @@ public final class DictationController: ObservableObject {
     /// Speech recognized, now cleaning up / formatting.
     @Published public private(set) var isTranscribing = false
 
-    @Published public var trigger: TriggerKey {
+    /// Dictation, Command mode and paste-last shortcuts, changeable in Settings.
+    @Published public var shortcuts: ShortcutSet {
         didSet {
-            hotkey.trigger = trigger
-            UserDefaults.standard.set(trigger.rawValue, forKey: Keys.trigger)
+            hotkey.shortcuts = shortcuts
+            if let data = try? JSONEncoder().encode(shortcuts) { UserDefaults.standard.set(data, forKey: Keys.shortcuts) }
             updateFnGuard()
         }
     }
-    /// While fn is the dictation key, pause the system's 🌐 action and hide fn presses, so taps
+    /// The dictation shortcut alone, for the quick picker in the menu.
+    public var dictateShortcut: KeyShortcut {
+        get { shortcuts.dictate }
+        set {
+            var updated = shortcuts
+            updated.dictate = newValue
+            // Command mode follows the dictation key when it was "dictation key + ⌃".
+            if let command = shortcuts.command, command.modifiers == shortcuts.dictate.modifiers + [ModifierKey(.control)] {
+                updated.command = KeyShortcut(newValue.modifiers + [ModifierKey(.control)])
+            }
+            shortcuts = updated
+        }
+    }
+    /// Which shortcut is being recorded in Settings, and the keys held so far.
+    @Published public private(set) var recordingShortcut: ShortcutSlot?
+    @Published public private(set) var recordingPreview: [String] = []
+    /// Why the last recorded shortcut wasn't accepted.
+    @Published public private(set) var shortcutError: String?
+    /// While fn is part of a shortcut, pause the system's 🌐 action and hide fn presses, so taps
     /// and double-taps don't open the emoji picker. Restored as soon as Kudu quits.
     @Published public var preventEmojiPicker: Bool {
         didSet {
@@ -109,6 +128,7 @@ public final class DictationController: ObservableObject {
 
     private enum Keys {
         static let trigger = "triggerKey"
+        static let shortcuts = "shortcuts"
         static let soundsEnabled = "soundsEnabled"
         static let recordingMode = "recordingMode"
         static let microphone = "microphoneUID"
@@ -121,8 +141,8 @@ public final class DictationController: ObservableObject {
         self.history = history
         self.ledger = ledger ?? UsageLedger(backfillFrom: history)
         let defaults = UserDefaults.standard
-        let trigger = defaults.string(forKey: Keys.trigger).flatMap(TriggerKey.init(rawValue:)) ?? .fn
-        self.trigger = trigger
+        let shortcuts = Self.loadShortcuts(defaults)
+        self.shortcuts = shortcuts
         // The always-warm microphone option was removed: the mic is open only while dictating.
         defaults.removeObject(forKey: "keepMicWarm")
         self.preventEmojiPicker = defaults.object(forKey: Keys.preventEmojiPicker) as? Bool ?? true
@@ -131,7 +151,7 @@ public final class DictationController: ObservableObject {
         self.soundsEnabled = defaults.object(forKey: Keys.soundsEnabled) as? Bool ?? true
         self.microphoneUID = defaults.string(forKey: Keys.microphone)
         self.learnFromCorrections = defaults.object(forKey: Keys.learnFromCorrections) as? Bool ?? true
-        self.hotkey = HotkeyMonitor(trigger: trigger)
+        self.hotkey = HotkeyMonitor(shortcuts: shortcuts)
         sounds.isEnabled = soundsEnabled
         hotkey.suppressFn = preventEmojiPicker
         hotkey.onEvent = { [weak self] event in self?.handle(event) }
@@ -198,12 +218,80 @@ public final class DictationController: ObservableObject {
     }
 
     private func updateFnGuard() {
-        if hotkeyActive && trigger == .fn && preventEmojiPicker {
+        if hotkeyActive && shortcuts.usesFn && preventEmojiPicker {
             fnGuard.engage()
         } else {
             // Also cleans up after a previous run that was killed while engaged.
             fnGuard.disengage()
         }
+    }
+
+    // MARK: - Shortcuts
+
+    /// Saved shortcuts, or the dictation key chosen in earlier versions (fn, Right ⌘, Right ⌥).
+    private static func loadShortcuts(_ defaults: UserDefaults) -> ShortcutSet {
+        if let data = defaults.data(forKey: Keys.shortcuts),
+           let saved = try? JSONDecoder().decode(ShortcutSet.self, from: data) {
+            return saved
+        }
+        var shortcuts = ShortcutSet.defaults
+        switch defaults.string(forKey: Keys.trigger) {
+        case "rightCommand": shortcuts.dictate = .rightCommand
+        case "rightOption": shortcuts.dictate = .rightOption
+        default: break
+        }
+        if shortcuts.dictate != .fn { shortcuts.command = KeyShortcut(shortcuts.dictate.modifiers + [ModifierKey(.control)]) }
+        return shortcuts
+    }
+
+    /// Records the next key combination as the shortcut for `slot`.
+    public func recordShortcut(_ slot: ShortcutSlot) {
+        hotkey.cancelRecording()
+        shortcutError = nil
+        recordingShortcut = slot
+        recordingPreview = []
+        hotkey.recordShortcut { [weak self] preview in
+            self?.recordingPreview = preview
+        } done: { [weak self] shortcut in
+            guard let self else { return }
+            self.recordingShortcut = nil
+            self.recordingPreview = []
+            guard let shortcut else { return }
+            self.apply(shortcut, to: slot)
+        }
+    }
+
+    public func cancelShortcutRecording() {
+        hotkey.cancelRecording()
+        recordingShortcut = nil
+        recordingPreview = []
+    }
+
+    public func resetShortcuts() {
+        shortcutError = nil
+        shortcuts = .defaults
+    }
+
+    private func apply(_ shortcut: KeyShortcut, to slot: ShortcutSlot) {
+        if slot != .pasteLast, !shortcut.isUsableForHolding(keyTypesText: KeyboardLayout.typesText) {
+            shortcutError = "\(shortcut.displayName) types text, so it can't be held to talk. Add ⌃, ⌥ or ⌘, or use fn or an F-key."
+            return
+        }
+        if slot == .pasteLast, shortcut.isModifierOnly {
+            shortcutError = "Paste last transcript needs a key, like ⌃⌘V."
+            return
+        }
+        var updated = shortcuts
+        switch slot {
+        case .dictate: updated.dictate = shortcut
+        case .command: updated.command = shortcut
+        case .pasteLast: updated.pasteLast = shortcut
+        }
+        if let problem = updated.problems.first {
+            shortcutError = problem
+            return
+        }
+        shortcuts = updated
     }
 
     // MARK: - Model

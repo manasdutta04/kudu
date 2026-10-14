@@ -158,7 +158,7 @@ private struct SidebarStatus: View {
 
     private var message: String {
         switch controller.modelState {
-        case .ready where controller.hotkeyActive: "Ready · hold \(controller.trigger.displayName)"
+        case .ready where controller.hotkeyActive: "Ready · hold \(controller.shortcuts.dictate.displayName)"
         case .ready: "Needs Accessibility permission"
         case .downloading(let fraction): "Downloading model \(Int(fraction * 100))%"
         case .loading: "Loading speech model…"
