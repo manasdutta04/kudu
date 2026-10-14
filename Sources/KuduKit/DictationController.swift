@@ -15,6 +15,8 @@ public final class DictationController: ObservableObject {
 
     @Published public private(set) var modelState: ModelState = .missing
     @Published public private(set) var isRecording = false
+    /// Recording continues without holding the key (double-tap to start, tap to stop).
+    @Published public private(set) var isHandsFree = false
     @Published public private(set) var lastTranscript = ""
     /// Key-up → text inserted, in milliseconds, for the most recent dictation.
     @Published public private(set) var lastLatencyMs: Int?
@@ -51,6 +53,9 @@ public final class DictationController: ObservableObject {
     public let store: UserDataStore
     private var recordingStartedAt: ContinuousClock.Instant?
     private var transcriptionTask: Task<Void, Never>?
+    private var lastShortTapAt: ContinuousClock.Instant?
+    private var ignoreNextRelease = false
+    private let doubleTapWindow: Duration = .milliseconds(400)
 
     private let log = Logger(subsystem: "app.kudu", category: "dictation")
     private let signposter = OSSignposter(subsystem: "app.kudu", category: .pointsOfInterest)
@@ -144,10 +149,44 @@ public final class DictationController: ObservableObject {
 
     private func handle(_ event: HotkeyEvent) {
         switch event {
-        case .pressed: beginRecording()
-        case .released: finishRecording()
-        case .cancelled: cancelRecording()
+        case .pressed:
+            if isHandsFree {
+                // Tap while locked: stop and transcribe. Ignore this press's release.
+                isHandsFree = false
+                ignoreNextRelease = true
+                finishRecording()
+            } else {
+                beginRecording()
+            }
+        case .released:
+            if ignoreNextRelease {
+                ignoreNextRelease = false
+            } else if !isHandsFree {
+                handleRelease()
+            }
+        case .cancelled:
+            isHandsFree = false
+            ignoreNextRelease = false
+            cancelRecording()
         }
+    }
+
+    /// A normal hold finishes on release. Two quick taps lock recording hands-free.
+    private func handleRelease() {
+        guard isRecording, let started = recordingStartedAt else { return }
+        let now = ContinuousClock.now
+        guard now - started < minimumDuration else {
+            finishRecording()
+            return
+        }
+        if let lastTap = lastShortTapAt, now - lastTap < doubleTapWindow {
+            lastShortTapAt = nil
+            isHandsFree = true
+            overlay.model.isLocked = true
+            return
+        }
+        lastShortTapAt = now
+        finishRecording()
     }
 
     private func beginRecording() {
@@ -176,7 +215,10 @@ public final class DictationController: ObservableObject {
         isRecording = false
         hotkey.isDictating = false
         overlay.hide()
-        sounds.playCancel()
+        // Only make a sound for a real dictation being cancelled, not a key chord.
+        if let started = recordingStartedAt, ContinuousClock.now - started >= minimumDuration {
+            sounds.playCancel()
+        }
     }
 
     private func finishRecording() {

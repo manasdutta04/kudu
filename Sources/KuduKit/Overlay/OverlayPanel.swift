@@ -11,6 +11,8 @@ public final class OverlayModel: ObservableObject {
     }
 
     @Published public var phase: Phase = .recording
+    /// Hands-free recording: shows a lock instead of requiring the key to be held.
+    @Published public var isLocked = false
     /// Recent input levels (0...1), newest last, for the waveform bars.
     @Published public var levels: [Float] = Array(repeating: 0, count: OverlayModel.barCount)
 
@@ -59,7 +61,10 @@ public final class OverlayPanel {
 
     public func show(_ phase: OverlayModel.Phase) {
         model.phase = phase
-        if phase == .recording { model.resetLevels() }
+        if phase == .recording {
+            model.resetLevels()
+            model.isLocked = false
+        }
         guard !panel.isVisible else { return }
         position()
         panel.orderFrontRegardless()
@@ -104,6 +109,12 @@ struct OverlayView: View {
         switch model.phase {
         case .recording:
             HStack(spacing: 3) {
+                if model.isLocked {
+                    Image(systemName: "lock.fill")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .padding(.trailing, 3)
+                }
                 ForEach(Array(model.levels.enumerated()), id: \.offset) { _, level in
                     Capsule()
                         .fill(.white)
