@@ -25,9 +25,10 @@ fn up   ─▶ AudioRecorder.stop ─▶ ParakeetEngine.transcribe ─▶ TextPi
 - Escape cancels a dictation and is swallowed.
 - Two quick taps lock hands-free recording.
 - The tap runs on its own thread at the HID level (session level as a fallback).
-- **The emoji picker:** while fn is the dictation key, the tap swallows both the fn press and its release, so macOS never sees a 🌐 tap.
-  - Letting only the press through leaves the system thinking fn is held, and the next fn event completes a "tap".
-  - Nothing in System Settings is changed; fn works normally as soon as Kudu quits.
+- **The emoji picker:** macOS decides the 🌐 action below the level an app's event tap can intercept, so hiding fn events alone doesn't stop it.
+  - While fn is the dictation key, `FnKeyGuard` (`KuduCore`) sets "Press 🌐 key to" to *Do Nothing*. It uses HIToolbox's `TISUpdateFnUsageType`, the same call System Settings makes, which takes effect immediately.
+  - The original is saved first and restored on quit or on SIGTERM/SIGINT/SIGHUP. After a crash it is restored on the next launch, and a change the user makes meanwhile is kept.
+  - The tap also hides lone fn presses (and the fn flag on other events) from apps.
 
 ### Audio (`KuduKit/Audio`)
 - `AVAudioEngine` with a tap on the input node, converted to 16 kHz mono with `AVAudioConverter`.
