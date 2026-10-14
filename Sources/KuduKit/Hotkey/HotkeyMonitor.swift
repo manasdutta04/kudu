@@ -51,7 +51,10 @@ public enum HotkeyEvent: Sendable {
 /// Watches the trigger key with a CGEventTap at session level.
 ///
 /// The tap is active (not listen-only) so it can swallow events: Escape while dictating, and
-/// every fn release, which macOS would otherwise turn into the emoji picker ("Press 🌐 key to").
+/// — when fn is the dictation key — the fn press and release themselves. macOS turns an fn
+/// press/release pair it sees into the 🌐 action (emoji picker, input source switch). Letting
+/// the press through but not the release is worse: the system is left thinking fn is held,
+/// and the *next* fn event completes a "tap". So both halves are hidden from the system.
 /// That requires Accessibility permission, which Kudu needs anyway to insert text.
 ///
 /// The tap runs on its own high-priority thread. If it ran on the main thread, any moment the
@@ -67,6 +70,8 @@ public final class HotkeyMonitor: @unchecked Sendable {
         /// be cancelled (Escape, a shortcut) while fn is still held, and its release must still
         /// be swallowed.
         var fnDown = false
+        /// Hide fn from the rest of the system while it is the dictation key.
+        var suppressFn = true
     }
 
     private let state: OSAllocatedUnfairLock<State>
@@ -76,6 +81,12 @@ public final class HotkeyMonitor: @unchecked Sendable {
     public var trigger: TriggerKey {
         get { state.withLock { $0.trigger } }
         set { state.withLock { $0.trigger = newValue; $0.triggerDown = false } }
+    }
+
+    /// When fn is the trigger, keep the system from seeing fn presses (no emoji picker).
+    public var suppressFn: Bool {
+        get { state.withLock { $0.suppressFn } }
+        set { state.withLock { $0.suppressFn = newValue } }
     }
 
     /// Set by the owner while a dictation is in progress, so Escape can be swallowed.
@@ -167,8 +178,10 @@ public final class HotkeyMonitor: @unchecked Sendable {
                 var swallow = false
                 if keyCode == TriggerKey.fn.keyCode {
                     let down = flags.contains(.maskSecondaryFn)
-                    // While fn is the dictation key, macOS must never see a fn release on its own.
-                    if !down && state.fnDown && state.trigger == .fn { swallow = true }
+                    if state.trigger == .fn && state.suppressFn {
+                        // Swallow the press, and the release of a press we swallowed.
+                        swallow = down || state.fnDown
+                    }
                     state.fnDown = down
                 }
 
@@ -191,6 +204,9 @@ public final class HotkeyMonitor: @unchecked Sendable {
                     events.append(.released)
                 }
                 return (swallow, events)
+            }
+            if keyCode == TriggerKey.fn.keyCode {
+                log.debug("fn \(flags.contains(.maskSecondaryFn) ? "down" : "up") swallowed=\(swallow)")
             }
             emit(events)
             return swallow

@@ -54,7 +54,7 @@ struct MenuContent: View {
             }
             if controller.trigger == .fn {
                 Toggle("Stop fn from opening the emoji picker", isOn: $controller.preventEmojiPicker)
-                    .help("While Kudu is running, the 🌐 key's own action is paused. Quitting Kudu restores it.")
+                    .help("While Kudu is running, fn is reserved for dictation, so it can't open the emoji picker. Quit Kudu and fn works as usual.")
             }
             Picker("Recording", selection: $controller.recordingMode) {
                 ForEach(RecordingMode.allCases) { mode in Text(mode.title).tag(mode) }
