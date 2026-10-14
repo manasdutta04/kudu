@@ -27,6 +27,8 @@ private struct PageScroll<Content: View>: View {
                 .frame(maxWidth: 820, alignment: .leading)
                 .frame(maxWidth: .infinity)
         }
+        // Scrolling stays (trackpad, wheel); the bar itself is hidden for a calmer page.
+        .scrollIndicators(.hidden)
     }
 }
 

@@ -34,6 +34,8 @@ struct HomeView: View {
             .frame(maxWidth: 980, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
+        // Scrolling stays (trackpad, wheel); the bar itself is hidden for a calmer page.
+        .scrollIndicators(.hidden)
     }
 
     @ViewBuilder private var historySection: some View {

@@ -30,6 +30,8 @@ struct InsightsPage: View {
             .frame(maxWidth: 900, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
+        // Scrolling stays (trackpad, wheel); the bar itself is hidden for a calmer page.
+        .scrollIndicators(.hidden)
     }
 }
 
