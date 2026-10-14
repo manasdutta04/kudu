@@ -111,9 +111,21 @@ public final class TextInserter {
 
     // MARK: - Paste
 
+    /// The user's clipboard, waiting to be put back after our paste.
+    private var pendingRestore: (items: [[NSPasteboard.PasteboardType: Data]], task: Task<Void, Never>)?
+
+    /// Posts ⌘V and returns at once; the user's clipboard is restored in the background.
     private func insertViaPaste(_ text: String) async {
         let pasteboard = NSPasteboard.general
-        let saved = savePasteboard(pasteboard)
+        // A previous paste may still be waiting to restore: its saved items are the user's real
+        // clipboard, whereas the pasteboard now holds our own text.
+        let saved: [[NSPasteboard.PasteboardType: Data]]
+        if let pending = pendingRestore {
+            pending.task.cancel()
+            saved = pending.items
+        } else {
+            saved = savePasteboard(pasteboard)
+        }
 
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
@@ -123,10 +135,15 @@ public final class TextInserter {
 
         postCommandV()
 
-        try? await Task.sleep(for: clipboardRestoreDelay)
-        // Only restore if nobody else (the user, another app) changed the clipboard meanwhile.
-        guard pasteboard.changeCount == ourChangeCount else { return }
-        restorePasteboard(pasteboard, items: saved)
+        let task = Task { @MainActor [weak self, clipboardRestoreDelay] in
+            try? await Task.sleep(for: clipboardRestoreDelay)
+            guard !Task.isCancelled, let self else { return }
+            self.pendingRestore = nil
+            // Only restore if nobody else (the user, another app) changed the clipboard meanwhile.
+            guard pasteboard.changeCount == ourChangeCount else { return }
+            self.restorePasteboard(pasteboard, items: saved)
+        }
+        pendingRestore = (saved, task)
     }
 
     private func postCommandV() {
