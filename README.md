@@ -1,15 +1,23 @@
 # Kudu
 
-**Private, fast voice dictation for macOS.** Hold **fn**, speak, release: clean text appears
-wherever your cursor is, in any app. Everything runs on your Mac. No account, no cloud, no
-telemetry.
+**Private, fast voice dictation.** Hold a key, speak, release: clean text appears wherever
+your cursor is, in any app. Speech recognition runs on your own computer. No account, no
+cloud, no telemetry.
 
 | | |
 |---|---|
-| ⚡ **Fast** | Text lands ~50–80 ms after you release the key (measured on M4 with 4–13 s clips) |
-| 🔒 **Private** | Speech recognition runs on the Apple Neural Engine; audio never leaves memory |
-| 🪶 **Light** | ~11 MB app; the speech model (~450 MB) downloads once, then works offline |
-| 🍎 **Native** | Swift, SwiftUI and AppKit. Lives in the menu bar |
+| ⚡ **Fast** | Text lands ~130–150 ms after you release the key (Apple M4) |
+| 🔒 **Private** | Audio never leaves your computer |
+| 🪶 **Light** | ~12 MB app; the speech model (~450 MB) downloads once, then works offline |
+| 🧩 **Native** | A native app per platform, not a web wrapper |
+
+## Platforms
+
+| Platform | Status | Folder |
+|---|---|---|
+| macOS 14+ (Apple Silicon) | ✅ Available (early) | [`macos/`](macos) (Swift, SwiftUI, AppKit) |
+| Windows | 🗓 Planned | `windows/` (Rust) |
+| Linux | 🗓 Planned | `linux/` (Rust) |
 
 ## Features
 - **Hold to talk** on fn, Right ⌘ or Right ⌥. Double-tap for hands-free; Escape cancels.
@@ -24,39 +32,25 @@ telemetry.
 - **Personal dictionary** for names and jargon the model mishears.
 - **Snippets:** say "my email" and get your address. Supports `{date}`, `{time}` and `{clipboard}`.
 - **History** of recent dictations, including the raw transcript, kept in memory only.
-- Sounds, open at login, a warning when your mic is silent.
+- A small frosted-glass pill with a live waveform; sounds; open at login.
 
 See the [roadmap](docs/ROADMAP.md) for what's next.
 
-## Requirements
-- macOS 14 or later, on Apple Silicon.
-- Swift 6.2+ toolchain. The Command Line Tools are enough; Xcode is optional.
-
-## Build & run
+## Quick start (macOS)
 ```bash
-scripts/build-app.sh          # → build/Kudu.app
-open build/Kudu.app
+cd macos
+scripts/build-app.sh && open build/Kudu.app
 ```
-On first launch Kudu asks for **Microphone** and **Accessibility** access and downloads the
-speech model.
+See [macos/README.md](macos/README.md) for requirements, signing, tests and benchmarks.
 
-Ad-hoc signed builds lose their Accessibility grant on every rebuild. While developing, sign
-with a stable certificate:
-```bash
-KUDU_SIGN_IDENTITY="My Dev Cert" scripts/build-app.sh
-```
-
-## Test & benchmark
-```bash
-swift test                                       # cleanup pipeline unit tests
-swift run -c release kudu-bench clip.wav ...     # per-clip latency through the real engine
-```
-
-## Project
-- [Architecture](docs/ARCHITECTURE.md)
-- [Roadmap](docs/ROADMAP.md)
-- [Privacy](PRIVACY.md)
-- [Contributing](CONTRIBUTING.md)
+## Repository layout
+| Path | What |
+|---|---|
+| [`macos/`](macos) | The macOS app: Swift package, scripts, tests, [architecture](macos/ARCHITECTURE.md) |
+| [`docs/`](docs) | Project-wide docs, such as the [roadmap](docs/ROADMAP.md) |
+| [`PRIVACY.md`](PRIVACY.md) | What Kudu does and doesn't do with your data |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to contribute |
+| [`CHANGELOG.md`](CHANGELOG.md) | Release notes |
 
 ## Credits
 - [FluidAudio](https://github.com/FluidInference/FluidAudio): Apache-2.0.
