@@ -1,40 +1,13 @@
 import Foundation
 
-/// When the on-device language model formats a dictation.
-public enum SmartFormatting: String, Codable, Sendable, CaseIterable, Identifiable {
-    case off
-    /// Only dictations of `SmartFormatting.minimumWords` or more, so short phrases stay instant.
-    case longDictations
-    case always
-
-    public var id: String { rawValue }
-
-    public var title: String {
-        switch self {
-        case .off: "Off"
-        case .longDictations: "Longer dictations"
-        case .always: "Always"
-        }
-    }
-
-    public static let minimumWords = 12
-
-    public func applies(toWordCount words: Int) -> Bool {
-        switch self {
-        case .off: false
-        case .longDictations: words >= Self.minimumWords
-        case .always: words > 0
-        }
-    }
-}
-
 /// Which cleanup steps run on every dictation. Each one can be turned off in Settings.
 public struct CleanupSettings: Codable, Sendable, Equatable {
     public var removeFillers = true
     public var applySelfCorrections = true
     public var spokenCommands = true
     public var normalizeTimes = true
-    public var smartFormatting = SmartFormatting.longDictations
+    public var editingStrength = EditingStrength.light
+    public var styles = StyleSettings()
 
     public init() {}
 
@@ -46,7 +19,28 @@ public struct CleanupSettings: Codable, Sendable, Equatable {
         applySelfCorrections = try container.decodeIfPresent(Bool.self, forKey: .applySelfCorrections) ?? defaults.applySelfCorrections
         spokenCommands = try container.decodeIfPresent(Bool.self, forKey: .spokenCommands) ?? defaults.spokenCommands
         normalizeTimes = try container.decodeIfPresent(Bool.self, forKey: .normalizeTimes) ?? defaults.normalizeTimes
-        smartFormatting = try container.decodeIfPresent(SmartFormatting.self, forKey: .smartFormatting) ?? defaults.smartFormatting
+        if let strength = try container.decodeIfPresent(EditingStrength.self, forKey: .editingStrength) {
+            editingStrength = strength
+        } else if let legacy = try? container.decodeIfPresent(String.self, forKey: .smartFormatting) {
+            // 0.3 stored an on/off-style "smartFormatting" setting.
+            editingStrength = legacy == "off" ? .verbatim : .light
+        }
+        styles = try container.decodeIfPresent(StyleSettings.self, forKey: .styles) ?? defaults.styles
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(removeFillers, forKey: .removeFillers)
+        try container.encode(applySelfCorrections, forKey: .applySelfCorrections)
+        try container.encode(spokenCommands, forKey: .spokenCommands)
+        try container.encode(normalizeTimes, forKey: .normalizeTimes)
+        try container.encode(editingStrength, forKey: .editingStrength)
+        try container.encode(styles, forKey: .styles)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case removeFillers, applySelfCorrections, spokenCommands, normalizeTimes, editingStrength, styles
+        case smartFormatting // read-only, for settings saved by 0.3
     }
 }
 
@@ -85,7 +79,9 @@ extension TextPipeline {
         var stages: [any TextStage] = []
         if settings.normalizeTimes { stages.append(TimeNormalizer()) }
         stages.append(WhitespaceNormalizer())
+        stages.append(MessageLayout())
         stages.append(LineStartCapitalizer())
+        stages.append(StyleStage())
         stages.append(CursorFitter())
         return TextPipeline(stages: stages)
     }

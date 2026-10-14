@@ -4,13 +4,8 @@ import Foundation
 /// dictated, or whether the model rewrote it, answered it, or wrapped it in commentary.
 /// Formatting changes punctuation, casing, line breaks and number style — not the words.
 public enum FormattingGuard {
-    /// Largest share of words that may differ (edits, insertions, deletions).
-    public static let maximumWordChange = 0.35
-    /// Largest change in word count, as a share of the original.
-    public static let maximumLengthChange = 0.20
-
     /// Returns the cleaned-up model output if it is acceptable, otherwise nil.
-    public static func accept(original: String, formatted: String) -> String? {
+    public static func accept(original: String, formatted: String, strength: EditingStrength = .light) -> String? {
         var output = formatted.trimmingCharacters(in: .whitespacesAndNewlines)
         // Models sometimes wrap the answer in quotes or a code fence.
         for (open, close) in [("\"", "\""), ("“", "”"), ("```", "```")] where output.hasPrefix(open) && output.hasSuffix(close) && output.count > open.count + close.count {
@@ -23,10 +18,10 @@ public enum FormattingGuard {
         guard !before.isEmpty else { return nil }
 
         let lengthChange = abs(Double(after.count - before.count)) / Double(before.count)
-        guard lengthChange <= maximumLengthChange else { return nil }
+        guard lengthChange <= strength.maximumLengthChange else { return nil }
 
         let change = Double(editDistance(before, after)) / Double(before.count)
-        guard change <= maximumWordChange else { return nil }
+        guard change <= strength.maximumWordChange else { return nil }
         return output
     }
 

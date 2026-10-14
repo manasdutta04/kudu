@@ -34,3 +34,12 @@ import Testing
         #expect(FormattingGuard.accept(original: "hello there", formatted: "   ") == nil)
     }
 }
+
+@Suite struct PolishedStrengthTests {
+    @Test func polishedAllowsSmoothingThatLightRejects() {
+        let raw = "so um i think we should we should probably move the launch to next week maybe"
+        let smoothed = "I think we should probably move the launch to next week."
+        #expect(FormattingGuard.accept(original: raw, formatted: smoothed, strength: .light) == nil)
+        #expect(FormattingGuard.accept(original: raw, formatted: smoothed, strength: .polished) != nil)
+    }
+}

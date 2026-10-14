@@ -1,11 +1,14 @@
 import Foundation
 
-/// Broad class of the app receiving the text; drives formatting decisions.
+/// Broad class of the app receiving the text; drives formatting and style decisions.
 public enum AppCategory: String, Sendable, Codable, CaseIterable {
     case general
-    case code      // editors, IDEs, terminals: no forced capitalization or trailing period
-    case chat      // Slack, Messages, Discord: casual
-    case email     // Mail, Outlook: formal
+    case code             // editors, IDEs, terminals: no prose formatting, no trailing period
+    case personalMessage  // Messages, WhatsApp, Telegram
+    case workMessage      // Slack, Teams, Discord
+    case email            // Mail, Outlook
+
+    public var isMessage: Bool { self == .personalMessage || self == .workMessage }
 }
 
 /// What we know about the insertion point when cleaning up text.
@@ -13,10 +16,13 @@ public struct TextContext: Sendable, Equatable {
     public var category: AppCategory
     /// The character immediately before the cursor, if it could be read via Accessibility.
     public var precedingCharacter: Character?
+    /// How the user wants text written in this category of app.
+    public var style: WritingStyle
 
-    public init(category: AppCategory = .general, precedingCharacter: Character? = nil) {
+    public init(category: AppCategory = .general, precedingCharacter: Character? = nil, style: WritingStyle = .formal) {
         self.category = category
         self.precedingCharacter = precedingCharacter
+        self.style = style
     }
 }
 
