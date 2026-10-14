@@ -19,10 +19,16 @@ public struct DictationRecord: Codable, Identifiable, Sendable, Equatable {
     public var formatted: Bool
     /// A Command mode result (an edit or draft) rather than a dictation. Nil in older records.
     public var command: Bool?
+    /// Words changed by cleanup between the raw transcript and the final text (fillers removed,
+    /// corrections, dictionary spellings). Nil in older records.
+    public var cleanups: Int?
+    /// Dictionary spellings applied. Nil in older records.
+    public var dictionaryFixes: Int?
 
     public init(
         id: UUID = UUID(), date: Date = .now, raw: String, text: String, audioSeconds: Double,
-        latencyMs: Int, bundleID: String? = nil, formatted: Bool = false, command: Bool = false
+        latencyMs: Int, bundleID: String? = nil, formatted: Bool = false, command: Bool = false,
+        dictionaryFixes: Int = 0
     ) {
         self.id = id
         self.date = date
@@ -34,6 +40,8 @@ public struct DictationRecord: Codable, Identifiable, Sendable, Equatable {
         self.bundleID = bundleID
         self.formatted = formatted
         self.command = command ? true : nil
+        self.cleanups = command ? 0 : FormattingGuard.editDistance(FormattingGuard.words(raw), FormattingGuard.words(text))
+        self.dictionaryFixes = dictionaryFixes
     }
 
     public var isCommand: Bool { command == true }

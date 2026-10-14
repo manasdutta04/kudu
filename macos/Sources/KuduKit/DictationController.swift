@@ -52,6 +52,14 @@ public final class DictationController: ObservableObject {
     }
     public var microphones: [AudioInputDevice] { AudioDevices.inputs() }
 
+    /// Learn names and terms from the corrections made after a dictation.
+    @Published public var learnFromCorrections: Bool {
+        didSet {
+            UserDefaults.standard.set(learnFromCorrections, forKey: Keys.learnFromCorrections)
+            if !learnFromCorrections { editObserver.cancel() }
+        }
+    }
+
     @Published public var soundsEnabled: Bool {
         didSet {
             sounds.isEnabled = soundsEnabled
@@ -69,6 +77,10 @@ public final class DictationController: ObservableObject {
     public let store: UserDataStore
     /// Dictation history and stats, saved on this Mac.
     public let history: HistoryStore
+    /// Daily usage totals (no text) for the Insights page.
+    public let ledger: UsageLedger
+    /// Learns spellings from the corrections the user makes right after a dictation.
+    private let editObserver = EditObserver()
     private let formatter = SmartFormatter()
     /// Live voice levels, shared with the menu-bar icon.
     public var levels: OverlayModel { overlay.model }
@@ -100,12 +112,14 @@ public final class DictationController: ObservableObject {
         static let soundsEnabled = "soundsEnabled"
         static let recordingMode = "recordingMode"
         static let microphone = "microphoneUID"
+        static let learnFromCorrections = "learnFromCorrections"
         static let preventEmojiPicker = "preventEmojiPicker"
     }
 
-    public init(store: UserDataStore = UserDataStore(), history: HistoryStore = HistoryStore()) {
+    public init(store: UserDataStore = UserDataStore(), history: HistoryStore = HistoryStore(), ledger: UsageLedger? = nil) {
         self.store = store
         self.history = history
+        self.ledger = ledger ?? UsageLedger(backfillFrom: history)
         let defaults = UserDefaults.standard
         let trigger = defaults.string(forKey: Keys.trigger).flatMap(TriggerKey.init(rawValue:)) ?? .fn
         self.trigger = trigger
@@ -116,10 +130,12 @@ public final class DictationController: ObservableObject {
             .flatMap(RecordingMode.init(rawValue:)) ?? .holdOrDoubleTap
         self.soundsEnabled = defaults.object(forKey: Keys.soundsEnabled) as? Bool ?? true
         self.microphoneUID = defaults.string(forKey: Keys.microphone)
+        self.learnFromCorrections = defaults.object(forKey: Keys.learnFromCorrections) as? Bool ?? true
         self.hotkey = HotkeyMonitor(trigger: trigger)
         sounds.isEnabled = soundsEnabled
         hotkey.suppressFn = preventEmojiPicker
         hotkey.onEvent = { [weak self] event in self?.handle(event) }
+        editObserver.onLearned = { [weak self] corrections in self?.remember(corrections) }
         let overlayModel = overlay.model
         recorder.onLevel = { level in
             Task { @MainActor in overlayModel.push(rms: level) }
@@ -224,6 +240,24 @@ public final class DictationController: ObservableObject {
     /// Types a previous result at the cursor again (e.g. after it went to the wrong window).
     public func reinsert(_ record: DictationRecord, raw: Bool = false) {
         Task { await inserter.insert(raw ? record.raw : record.text) }
+    }
+
+    /// Saves learned spellings to the dictionary: a new entry, or one more way of hearing an
+    /// existing spelling.
+    private func remember(_ corrections: [LearnedCorrection]) {
+        for correction in corrections {
+            if let index = store.dictionary.firstIndex(where: { $0.written == correction.written }) {
+                if !store.dictionary[index].heard.contains(where: { $0.lowercased() == correction.heard }) {
+                    store.dictionary[index].heard.append(correction.heard)
+                }
+            } else {
+                store.dictionary.append(DictionaryEntry(heard: [correction.heard], written: correction.written, learned: true))
+            }
+        }
+        ledger.recordLearned(corrections.count)
+        let names = corrections.map { "“\($0.written)”" }.joined(separator: ", ")
+        log.info("Learned \(corrections.count) spelling(s)")
+        overlay.flash("✦ Learned \(names)", for: .seconds(2.5))
     }
 
     /// Types the most recent result at the cursor again (⌃⌘V, or the menu).
@@ -343,10 +377,12 @@ public final class DictationController: ObservableObject {
                 let latency = Int((ContinuousClock.now - releasedAt) / .milliseconds(1))
                 self.lastTranscript = result
                 self.lastLatencyMs = latency
-                self.history.append(DictationRecord(
+                let record = DictationRecord(
                     raw: instruction, text: result, audioSeconds: audioSeconds, latencyMs: latency,
                     bundleID: bundleID, formatted: true, command: true
-                ))
+                )
+                self.history.append(record)
+                self.ledger.record(record)
                 self.log.info("Command: \(audioSeconds, format: .fixed(precision: 1))s instruction → \(latency) ms (selection: \(selection?.isEmpty == false))")
             } catch {
                 self.log.error("Command failed: \(error.localizedDescription)")
@@ -387,6 +423,7 @@ public final class DictationController: ObservableObject {
 
     private func beginRecording() {
         guard !isRecording, transcriptionTask == nil else { return }
+        editObserver.cancel()
         guard modelState == .ready else {
             overlay.flash(modelState == .loading ? "Loading model…" : "Model not ready")
             return
@@ -484,6 +521,8 @@ public final class DictationController: ObservableObject {
         let snippets = SnippetStage(snippets: store.snippets, clipboard: { clipboardText })
         let after = TextPipeline.afterFormatting(settings: settings)
         let audioSeconds = Double(samples.count) / AudioRecorder.sampleRate
+        let dictionary = DictionaryStage(entries: store.dictionary)
+        let knownSpellings = Set(store.dictionary.map(\.written))
 
         transcriptionTask = Task { [signposter] in
             defer {
@@ -510,10 +549,16 @@ public final class DictationController: ObservableObject {
                 self.lastTranscript = text
                 self.lastLatencyMs = latency
                 if !text.isEmpty {
-                    self.history.append(DictationRecord(
+                    let record = DictationRecord(
                         raw: result.raw, text: text, audioSeconds: audioSeconds, latencyMs: latency,
-                        bundleID: target.bundleID, formatted: formatted
-                    ))
+                        bundleID: target.bundleID, formatted: formatted,
+                        dictionaryFixes: dictionary.corrections(in: result.raw)
+                    )
+                    self.history.append(record)
+                    self.ledger.record(record)
+                    if self.learnFromCorrections {
+                        self.editObserver.watch(inserted: text, known: knownSpellings)
+                    }
                 }
                 self.log.info(
                     "Dictation: \(audioSeconds, format: .fixed(precision: 1))s audio → \(latency) ms (formatted: \(formatted))"
