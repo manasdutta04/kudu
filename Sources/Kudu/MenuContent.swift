@@ -3,6 +3,7 @@ import SwiftUI
 
 struct MenuContent: View {
     @ObservedObject var controller: DictationController
+    @StateObject private var launchAtLogin = LaunchAtLogin()
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -54,6 +55,7 @@ struct MenuContent: View {
             Toggle("Sounds", isOn: $controller.soundsEnabled)
             Toggle("Keep microphone warm", isOn: $controller.keepMicWarm)
                 .help("Removes start-up delay and keeps the first syllable. The mic indicator stays on.")
+            Toggle("Open at login", isOn: Binding(get: { launchAtLogin.isEnabled }, set: { launchAtLogin.set($0) }))
 
             Divider()
 
