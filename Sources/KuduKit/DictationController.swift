@@ -38,7 +38,7 @@ public final class DictationController: ObservableObject {
     private let engine = ParakeetEngine()
     private let inserter = TextInserter()
     private let overlay = OverlayPanel()
-    private let pipeline = TextPipeline.basic
+    public let store: UserDataStore
     private var recordingStartedAt: ContinuousClock.Instant?
     private var transcriptionTask: Task<Void, Never>?
 
@@ -53,7 +53,8 @@ public final class DictationController: ObservableObject {
         static let keepMicWarm = "keepMicWarm"
     }
 
-    public init() {
+    public init(store: UserDataStore = UserDataStore()) {
+        self.store = store
         let defaults = UserDefaults.standard
         let trigger = defaults.string(forKey: Keys.trigger).flatMap(TriggerKey.init(rawValue:)) ?? .fn
         self.trigger = trigger
@@ -160,8 +161,17 @@ public final class DictationController: ObservableObject {
         let releasedAt = ContinuousClock.now
         let category = AppContext.frontmostCategory()
         let precedingCharacter = inserter.precedingCharacter()
+        // Read the clipboard now, on the main thread, and only if a snippet can use it.
+        let clipboardText = store.snippets.contains { $0.expansion.contains("{clipboard}") }
+            ? NSPasteboard.general.string(forType: .string) : nil
+        let pipeline = TextPipeline.standard(
+            settings: store.cleanup,
+            dictionary: store.dictionary,
+            snippets: store.snippets,
+            clipboard: { clipboardText }
+        )
 
-        transcriptionTask = Task { [engine, pipeline, signposter] in
+        transcriptionTask = Task { [engine, signposter] in
             defer { self.transcriptionTask = nil }
             let interval = signposter.beginInterval("dictation")
             do {
