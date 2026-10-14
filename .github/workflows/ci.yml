@@ -71,7 +71,7 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             desktop/target
-          key: cargo-${{ runner.os }}-${{ hashFiles('desktop/Cargo.lock') }}
+          key: cargo-v2-${{ runner.os }}-${{ hashFiles('desktop/Cargo.lock', 'desktop/.cargo/config.toml') }}
 
       - name: Tests
         run: cargo test --workspace

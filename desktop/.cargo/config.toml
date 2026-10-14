@@ -12,3 +12,7 @@ rustflags = ["-C", "target-feature=+crt-static"]
 # debug builds so its runtime matches the speech library's.
 LLAMA_STATIC_CRT = "1"
 LLAMA_LIB_PROFILE = "Release"
+# llama.cpp's CMake ignores /MT flags, so the runtime is set in a toolchain file. The target
+# suffix makes the cmake crate use it for Windows builds only.
+CMAKE_TOOLCHAIN_FILE_x86_64_pc_windows_msvc = { value = "packaging/windows/static-crt.cmake", relative = true }
+CMAKE_TOOLCHAIN_FILE_aarch64_pc_windows_msvc = { value = "packaging/windows/static-crt.cmake", relative = true }
