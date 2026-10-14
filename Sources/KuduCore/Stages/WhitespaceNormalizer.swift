@@ -7,6 +7,8 @@ public struct WhitespaceNormalizer: TextStage {
     public func apply(_ text: String, context: TextContext) -> String {
         var result = text.replacingOccurrences(of: "[ \\t]{2,}", with: " ", options: .regularExpression)
         result = result.replacingOccurrences(of: " +([,.;:!?])", with: "$1", options: .regularExpression)
+        result = result.replacingOccurrences(of: "[ \\t]+\n", with: "\n", options: .regularExpression)
+        result = result.replacingOccurrences(of: "\n[ \\t]+", with: "\n", options: .regularExpression)
         return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
