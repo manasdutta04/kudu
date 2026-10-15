@@ -1,5 +1,5 @@
 # Builds the .deb and .rpm packages with nfpm (https://nfpm.goreleaser.com) in the release
-# workflow: VERSION and PKG (the folder with the built files) come from the environment.
+# workflow, which fills in VERSION and PKG (the folder with the built files) with envsubst.
 name: kudu
 arch: amd64
 platform: linux
@@ -7,9 +7,10 @@ version: ${VERSION}
 section: utils
 priority: optional
 maintainer: Kudu contributors <noreply@github.com>
-description: |
-  Private, fast voice dictation. Hold a shortcut, speak, release: clean text appears wherever
-  your cursor is. Speech recognition runs on your computer; nothing is sent anywhere.
+description: |-
+  Private, fast voice dictation
+  Hold a shortcut, speak, release: clean text appears wherever your cursor is.
+  Speech recognition runs on your computer; nothing is sent anywhere.
 vendor: Kudu
 homepage: https://github.com/manasdutta04/kudu
 license: MIT
