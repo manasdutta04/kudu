@@ -3,6 +3,13 @@
 All notable changes to Kudu are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com) and the project uses [Semantic Versioning](https://semver.org).
 
+## [0.1.2] - 2026-10-15
+### Added
+- **More ways to install:** a Windows installer (`Kudu-Windows-x64-Setup.exe`: per-user, Start
+  menu, uninstall from Settings → Apps) and Linux packages for Debian/Ubuntu (`.deb`) and
+  Fedora/openSUSE (`.rpm`). The packages install the virtual-keyboard permission rule and load
+  the `uinput` module.
+
 ## [0.1.1] - 2026-10-15
 ### Fixed
 - **Windows and Linux: the app closed when downloading the speech model.** HTTPS downloads

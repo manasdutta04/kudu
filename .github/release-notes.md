@@ -26,7 +26,7 @@ In PowerShell:
 irm https://github.com/manasdutta04/kudu/releases/latest/download/install.ps1 | iex
 ```
 
-Or by hand: download **Kudu-Windows-x64.zip**, extract it, then in PowerShell in that folder run `Unblock-File .\kudu.exe` (or, when SmartScreen appears, click **More info → Run anyway**). Hold **Ctrl + Win** to dictate.
+Or download the installer, **Kudu-Windows-x64-Setup.exe** (when SmartScreen appears, click **More info → Run anyway**), or the portable **Kudu-Windows-x64.zip** (in PowerShell in its folder run `Unblock-File .\kudu.exe`). Hold **Ctrl + Win** to dictate.
 
 ### Linux (x86_64, X11 and Wayland) · beta
 
@@ -36,7 +36,7 @@ curl -fsSL https://github.com/manasdutta04/kudu/releases/latest/download/install
 
 The script installs Kudu to `~/.local/bin` and the app menu, and asks for `sudo` once to let Kudu read the keyboard (`input` group) and type through a virtual keyboard (`/dev/uinput`). Log out and back in after the first install. Hold **Ctrl + Super** to dictate.
 
-Or by hand: extract **Kudu-Linux-x86_64.tar.gz** and run `./kudu`; the settings window shows the same permission commands.
+Or install a package: `sudo apt install ./Kudu-Linux-x86_64.deb` (Debian, Ubuntu, Mint) or `sudo dnf install ./Kudu-Linux-x86_64.rpm` (Fedora, openSUSE), then add yourself to the input group once: `sudo usermod -aG input $USER` and log out and in. Any other distribution: extract **Kudu-Linux-x86_64.tar.gz** and run `./kudu/kudu`.
 
 ## First launch
 
@@ -44,7 +44,7 @@ Kudu downloads its speech model once (Mac ~450 MB; Windows/Linux: Accurate 482 M
 
 ## What's in this release
 
-**Fixed on Windows and Linux:** the app closed when you clicked Download for the speech model. Downloads work now. If anything else goes wrong, Kudu shows an error instead of closing, and writes details to `kudu.log` (Windows: `%LOCALAPPDATA%\Kudu\data\kudu.log`, Linux: `~/.local/share/kudu/kudu.log`). Please attach that file when you report a problem.
+**New ways to install:** a Windows installer, and `.deb` and `.rpm` packages for Linux. Also included from 0.1.1: Windows and Linux no longer close when downloading the speech model; problems show an error and are written to `kudu.log` (Windows: `%LOCALAPPDATA%\Kudu\data\kudu.log`, Linux: `~/.local/share/kudu/kudu.log`).
 
 New to Kudu? This is still the first public version:
 

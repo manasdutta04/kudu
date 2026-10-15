@@ -30,10 +30,10 @@ xattr -cr /Applications/Kudu.app
 ```powershell
 irm https://github.com/manasdutta04/kudu/releases/latest/download/install.ps1 | iex
 ```
-Installed by hand? Run `Unblock-File .\kudu.exe` in its folder, or click **More info → Run anyway**
-when SmartScreen appears.
+Or run the installer (`Kudu-Windows-x64-Setup.exe`). When SmartScreen appears, click **More info → Run
+anyway**; for the portable zip, run `Unblock-File .\kudu.exe` in its folder.
 
-**Linux** (beta, x86_64, X11 and Wayland)
+**Linux** (beta, x86_64, X11 and Wayland): `.deb` and `.rpm` packages are on the release page, or
 ```bash
 curl -fsSL https://github.com/manasdutta04/kudu/releases/latest/download/install.sh | sh
 ```
