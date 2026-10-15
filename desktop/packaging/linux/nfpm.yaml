@@ -1,0 +1,46 @@
+# Builds the .deb and .rpm packages with nfpm (https://nfpm.goreleaser.com) in the release
+# workflow: VERSION and PKG (the folder with the built files) come from the environment.
+name: kudu
+arch: amd64
+platform: linux
+version: ${VERSION}
+section: utils
+priority: optional
+maintainer: Kudu contributors <noreply@github.com>
+description: |
+  Private, fast voice dictation. Hold a shortcut, speak, release: clean text appears wherever
+  your cursor is. Speech recognition runs on your computer; nothing is sent anywhere.
+vendor: Kudu
+homepage: https://github.com/manasdutta04/kudu
+license: MIT
+
+overrides:
+  deb:
+    depends:
+      - libasound2 | libasound2t64
+      - libssl3 | libssl3t64
+      - libgomp1
+  rpm:
+    depends:
+      - alsa-lib
+      - openssl-libs
+      - libgomp
+
+contents:
+  - src: ${PKG}/kudu
+    dst: /usr/bin/kudu
+    file_info:
+      mode: 0755
+  - src: ${PKG}/kudu.desktop
+    dst: /usr/share/applications/kudu.desktop
+  - src: ${PKG}/kudu.png
+    dst: /usr/share/icons/hicolor/256x256/apps/kudu.png
+  # Lets the input group create the virtual keyboard Kudu types with.
+  - src: ${PKG}/70-kudu-uinput.rules
+    dst: /usr/lib/udev/rules.d/70-kudu-uinput.rules
+  # Loads the uinput module at boot.
+  - src: ${PKG}/kudu-uinput.conf
+    dst: /usr/lib/modules-load.d/kudu-uinput.conf
+
+scripts:
+  postinstall: ${PKG}/postinstall.sh

@@ -54,18 +54,27 @@ jobs:
         run: cargo build --release -p kudu-app
       - name: Package
         shell: pwsh
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
         run: |
           New-Item -ItemType Directory -Force -Path pkg | Out-Null
           Copy-Item target/release/kudu.exe pkg/
           Copy-Item ../LICENSE pkg/LICENSE.txt
           Compress-Archive -Path pkg/* -DestinationPath ../Kudu-Windows-x64.zip -Force
           Copy-Item packaging/windows/install.ps1 ../install.ps1
-          Get-Item ../Kudu-Windows-x64.zip | Format-List Name, Length
+          # Installer (per-user, Start menu, uninstall from Settings → Apps).
+          choco install innosetup -y --no-progress | Out-Null
+          $version = $env:TAG.TrimStart("v")
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Q "/DAppVersion=$version" "/DSourceDir=$PWD\pkg" packaging\windows\kudu.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed" }
+          Move-Item packaging/windows/Kudu-Windows-x64-Setup.exe ../
+          Get-Item ../Kudu-Windows-x64.zip, ../Kudu-Windows-x64-Setup.exe | Format-Table Name, Length
       - uses: actions/upload-artifact@v4
         with:
           name: windows
           path: |
             Kudu-Windows-x64.zip
+            Kudu-Windows-x64-Setup.exe
             install.ps1
 
   linux:
@@ -96,11 +105,25 @@ jobs:
           tar -C pkg -czf ../Kudu-Linux-x86_64.tar.gz kudu
           cp packaging/linux/install.sh ../install.sh
           ls -la ../Kudu-Linux-x86_64.tar.gz
+      - name: Debian and RPM packages
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          curl -fsSL -o nfpm.deb https://github.com/goreleaser/nfpm/releases/download/v2.48.0/nfpm_2.48.0_amd64.deb
+          sudo dpkg -i nfpm.deb
+          cp packaging/linux/postinstall.sh packaging/linux/kudu-uinput.conf pkg/kudu/
+          export VERSION="${TAG#v}" PKG="$PWD/pkg/kudu"
+          nfpm package --config packaging/linux/nfpm.yaml --packager deb --target ../Kudu-Linux-x86_64.deb
+          nfpm package --config packaging/linux/nfpm.yaml --packager rpm --target ../Kudu-Linux-x86_64.rpm
+          dpkg-deb --info ../Kudu-Linux-x86_64.deb | sed -n '1,20p'
+          ls -la ../Kudu-Linux-x86_64.*
       - uses: actions/upload-artifact@v4
         with:
           name: linux
           path: |
             Kudu-Linux-x86_64.tar.gz
+            Kudu-Linux-x86_64.deb
+            Kudu-Linux-x86_64.rpm
             install.sh
 
   release:
