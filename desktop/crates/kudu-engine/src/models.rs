@@ -270,3 +270,38 @@ pub fn remove_smart_model(model: SmartModel, models: &Path) -> Result<()> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A real HTTPS download through GitHub's redirect, with the TLS the app ships. Needs the
+    /// network, so it runs in CI (`--include-ignored`), not by default.
+    #[test]
+    #[ignore = "needs the network"]
+    fn downloads_over_https() {
+        let dest = std::env::temp_dir().join(format!("kudu-download-test-{}", std::process::id()));
+        let mut last = 0.0;
+        download_file(
+            "https://github.com/manasdutta04/kudu/releases/download/v0.1.0/install.sh",
+            &dest,
+            &mut |f| last = f,
+            &|| false,
+        )
+        .expect("download");
+        let size = fs::metadata(&dest).map(|m| m.len()).unwrap_or(0);
+        let _ = fs::remove_file(&dest);
+        assert!(size > 1000, "got {size} bytes");
+        assert_eq!(last, 1.0);
+    }
+
+    #[test]
+    fn model_urls_point_at_releases() {
+        for model in SpeechModel::ALL {
+            assert!(model.url().starts_with("https://github.com/k2-fsa/sherpa-onnx/releases/download/"));
+        }
+        for model in SmartModel::ALL {
+            assert!(model.url().starts_with("https://huggingface.co/Qwen/"));
+        }
+    }
+}

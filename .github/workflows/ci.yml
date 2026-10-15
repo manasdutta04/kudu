@@ -74,7 +74,7 @@ jobs:
           key: cargo-v2-${{ runner.os }}-${{ hashFiles('desktop/Cargo.lock', 'desktop/.cargo/config.toml') }}
 
       - name: Tests
-        run: cargo test --workspace
+        run: cargo test --workspace -- --include-ignored
 
       - name: Lints
         run: cargo clippy --workspace --all-targets -- -D warnings

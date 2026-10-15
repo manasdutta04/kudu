@@ -2626,7 +2626,7 @@ dependencies = [
 
 [[package]]
 name = "kudu-app"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "ab_glyph",
  "anyhow",
@@ -2662,7 +2662,7 @@ dependencies = [
 
 [[package]]
 name = "kudu-core"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "fancy-regex",
  "regex",
@@ -2672,7 +2672,7 @@ dependencies = [
 
 [[package]]
 name = "kudu-engine"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "bzip2 0.6.1",
@@ -5041,6 +5041,7 @@ dependencies = [
  "rustls-pki-types",
  "ureq-proto",
  "utf8-zero",
+ "webpki-root-certs",
 ]
 
 [[package]]
@@ -5394,6 +5395,15 @@ checksum = "5a6580f308b1fad9207618087a65c04e7a10bc77e02c8e84e9b00dd4b12fa0bb"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "webpki-root-certs"
+version = "1.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "804f18a4ac2676ffb4e8b5b5fa9ae38af06df08162314f96a68d2a363e21a8ca"
+dependencies = [
+ "rustls-pki-types",
 ]
 
 [[package]]
