@@ -44,9 +44,11 @@ Kudu downloads its speech model once (Mac ~450 MB; Windows/Linux: Accurate 482 M
 
 ## What's in this release
 
-This is Kudu's first public release.
+**Fixed on Windows and Linux:** the app closed when you clicked Download for the speech model. Downloads work now. If anything else goes wrong, Kudu shows an error instead of closing, and writes details to `kudu.log` (Windows: `%LOCALAPPDATA%\Kudu\data\kudu.log`, Linux: `~/.local/share/kudu/kudu.log`). Please attach that file when you report a problem.
+
+New to Kudu? This is still the first public version:
 
 - **macOS:** hold fn (or any shortcut you set) to dictate; formatting while you speak with Apple's on-device model (lists, numbers, units, math, @mentions, email layout, code and terminal commands); Command mode to rewrite or draft text; styles per app; a personal dictionary that learns from your corrections, with an Undo notice; names and terms spelled the way they appear on screen; snippets; history and Insights with a streak heat map. Apple Silicon only.
-- **Windows and Linux (first beta):** the same text cleanup, styles, dictionary, snippets, learning and shortcuts as the Mac app, with on-device speech (Parakeet or Moonshine) and an optional small language model (Qwen2.5). Please report anything that doesn't work on your setup.
+- **Windows and Linux (beta):** the same text cleanup, styles, dictionary, snippets, learning and shortcuts as the Mac app, with on-device speech (Parakeet or Moonshine) and an optional small language model (Qwen2.5). Please report anything that doesn't work on your setup.
 
 Files are listed with SHA-256 checksums in `SHA256SUMS.txt`.

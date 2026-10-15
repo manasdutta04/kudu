@@ -3,6 +3,18 @@
 All notable changes to Kudu are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com) and the project uses [Semantic Versioning](https://semver.org).
 
+## [0.1.1] - 2026-10-15
+### Fixed
+- **Windows and Linux: the app closed when downloading the speech model.** HTTPS downloads
+  weren't enabled in the build, and the resulting error closed Kudu. Downloads work now, and a
+  real download runs in CI on Windows and Linux.
+
+### Changed
+- Kudu no longer closes when a background task fails: a failed download or dictation shows an
+  error and Kudu carries on. Any crash is written to `kudu.log` (Windows:
+  `%LOCALAPPDATA%\Kudu\data\kudu.log`, Linux: `~/.local/share/kudu/kudu.log`).
+- The microphone list is read in the background instead of on every status update.
+
 ## [0.1.0] - 2026-10-14
 **First public release**, with packages for macOS, Windows and Linux. The entries below it
 (0.2–0.7) are the development milestones that led up to it; they were never released
