@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/kudu-core", "crates/kudu-engine", "crates/kudu-app"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 license = "MIT"
 rust-version = "1.95"
@@ -26,7 +26,8 @@ opt-level = 3
 lto = "thin"
 codegen-units = 1
 strip = true
-panic = "abort"
+# Unwind (not abort) on a panic, so a failure in a background task (a download, one
+# dictation) is reported and recovered from instead of closing Kudu.
 
 # Fast debug builds that still run the speech model at a usable speed.
 [profile.dev.package."*"]

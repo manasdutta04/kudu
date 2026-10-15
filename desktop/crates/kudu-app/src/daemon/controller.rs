@@ -62,6 +62,8 @@ pub struct Controller {
     /// The dictionary before the last learned words, for Undo.
     undo_learned: Option<(Vec<DictionaryEntry>, i64)>,
     recording_slot: Option<ShortcutSlot>,
+    /// Microphone names, refreshed when the window opens (listing devices is slow on Windows).
+    microphones: Arc<Mutex<Vec<String>>>,
 }
 
 impl Controller {
@@ -95,6 +97,7 @@ impl Controller {
             observer: EditObserver::default(),
             undo_learned: None,
             recording_slot: None,
+            microphones: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
@@ -404,6 +407,17 @@ impl Controller {
                 };
                 self.send_status();
             }
+            Outcome::Failed(message) => {
+                // A model that crashed while loading shouldn't look like it's still loading.
+                if self.speech == ModelStatus::Loading {
+                    self.speech = ModelStatus::Failed { message: message.clone() };
+                }
+                if self.smart == ModelStatus::Loading {
+                    self.smart = ModelStatus::Failed { message: message.clone() };
+                }
+                self.platform.overlay().show(OverlayState::Message(message));
+                self.idle();
+            }
             Outcome::NothingHeard => {
                 self.platform.overlay().show(OverlayState::Message("Didn't catch that".into()));
                 self.idle();
@@ -568,6 +582,22 @@ impl Controller {
         self.platform.overlay().show(OverlayState::Message(message.into()));
     }
 
+    /// Lists the microphones again in the background, then updates the window.
+    pub fn refresh_microphones(&self) {
+        let (microphones, window) = (self.microphones.clone(), self.window.clone());
+        let status = self.status();
+        std::thread::Builder::new()
+            .name("kudu-devices".into())
+            .spawn(move || {
+                let names = Recorder::input_devices();
+                if *microphones.lock() != names {
+                    *microphones.lock() = names.clone();
+                    let _ = window.send(Event::Status(crate::ipc::Status { microphones: names, ..status }));
+                }
+            })
+            .ok();
+    }
+
     pub fn send_status(&self) {
         let _ = self.window.send(Event::Status(self.status()));
     }
@@ -579,7 +609,7 @@ impl Controller {
             hotkeys_active: self.hotkeys_active,
             recording: self.active.is_some(),
             launch_at_login: self.platform.launch_at_login(),
-            microphones: Recorder::input_devices(),
+            microphones: self.microphones.lock().clone(),
             issues: self
                 .platform
                 .setup_issues()

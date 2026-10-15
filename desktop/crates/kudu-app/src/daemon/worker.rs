@@ -58,6 +58,8 @@ pub enum Outcome {
     Command(Result<Finished, String>),
     /// The speech model heard nothing.
     NothingHeard,
+    /// A job failed unexpectedly.
+    Failed(String),
 }
 
 pub struct Finished {
@@ -93,7 +95,16 @@ impl Worker {
     fn run(mut self, jobs: Receiver<Job>, results: Sender<Outcome>) {
         vocabulary::preload();
         for job in jobs {
-            if let Some(outcome) = self.handle(job) {
+            // A crash in one job (a model that won't load, an odd recording) is reported and
+            // the worker carries on with the next one.
+            let outcome = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.handle(job))) {
+                Ok(outcome) => outcome,
+                Err(_) => {
+                    self.text.clear();
+                    Some(Outcome::Failed("Something went wrong; see kudu.log".into()))
+                }
+            };
+            if let Some(outcome) = outcome {
                 if results.send(outcome).is_err() {
                     break;
                 }

@@ -23,9 +23,7 @@ use controller::Controller;
 use store::Store;
 use worker::Job;
 
-pub fn run(args: &[String]) -> Result<()> {
-    let paths = Paths::new()?;
-    init_logging(&paths);
+pub fn run(args: &[String], paths: Paths) -> Result<()> {
     let background = args.iter().any(|a| a == "--background");
 
     // One Kudu at a time: a second launch just opens the running one's window.
@@ -73,6 +71,7 @@ pub fn run(args: &[String]) -> Result<()> {
         let _ = jobs.send(Job::LoadSmart { model: smart, models: models.clone() });
     }
     controller.idle_status();
+    controller.refresh_microphones();
 
     // First launch, or setup unfinished: show the window (unless started at login).
     if !background && (!controller.store.settings.onboarded || controller.speech == ModelStatus::Missing) {
@@ -89,14 +88,20 @@ pub fn run(args: &[String]) -> Result<()> {
                 Ok(PlatformEvent::Recorded(result)) => controller.recorded(result),
                 Ok(PlatformEvent::RecordingPreview(keys)) => window.send(ipc::Event::RecordingPreview { keys }),
                 Ok(PlatformEvent::UndoLearned) => controller.undo_learned(),
-                Ok(PlatformEvent::Tray(TrayAction::OpenWindow)) => window.open(&controller.status()),
+                Ok(PlatformEvent::Tray(TrayAction::OpenWindow)) => {
+                    window.open(&controller.status());
+                    controller.refresh_microphones();
+                }
                 Ok(PlatformEvent::Tray(TrayAction::PasteLast)) => controller.paste_last(),
                 Ok(PlatformEvent::Tray(TrayAction::Quit)) => break,
                 Err(_) => break,
             },
             recv(outcome_rx) -> outcome => if let Ok(outcome) = outcome { controller.worker_outcome(outcome) },
             recv(learned_rx) -> learned => if let Ok(learned) = learned { controller.learned(learned) },
-            recv(open_rx) -> _ => window.open(&controller.status()),
+            recv(open_rx) -> _ => {
+                window.open(&controller.status());
+                controller.refresh_microphones();
+            }
             recv(window.requests()) -> request => match request {
                 Ok(Request::Quit) => break,
                 Ok(request) => handle_request(&mut controller, &downloads, &jobs, request),
@@ -182,6 +187,18 @@ fn handle_request(controller: &mut Controller, downloads: &Downloads, jobs: &cro
     }
 }
 
+/// Runs `work`, turning a crash inside it into an error message instead of losing it.
+fn guarded<T>(work: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(work)).unwrap_or_else(|panic| {
+        let message = panic
+            .downcast_ref::<&str>()
+            .map(|s| s.to_string())
+            .or_else(|| panic.downcast_ref::<String>().cloned())
+            .unwrap_or_else(|| "unknown error".into());
+        Err(format!("Something went wrong: {message}"))
+    })
+}
+
 /// Model downloads, one at a time, on their own thread.
 struct Downloads {
     events: (crossbeam_channel::Sender<DownloadEvent>, crossbeam_channel::Receiver<DownloadEvent>),
@@ -214,15 +231,18 @@ impl Downloads {
         let (tx, cancelled) = (self.events.0.clone(), self.cancelled.clone());
         std::thread::spawn(move || {
             let progress_tx = tx.clone();
-            let result = kudu_engine::models::install_speech_model(
-                model,
-                &models,
-                &mut |f| {
-                    let _ = progress_tx.send(DownloadEvent::SpeechProgress(f));
-                },
-                &|| cancelled.load(Ordering::SeqCst),
-            );
-            let _ = tx.send(DownloadEvent::SpeechDone(model, result.map_err(|e| format!("{e:#}"))));
+            let result = guarded(|| {
+                kudu_engine::models::install_speech_model(
+                    model,
+                    &models,
+                    &mut |f| {
+                        let _ = progress_tx.send(DownloadEvent::SpeechProgress(f));
+                    },
+                    &|| cancelled.load(Ordering::SeqCst),
+                )
+                .map_err(|e| format!("{e:#}"))
+            });
+            let _ = tx.send(DownloadEvent::SpeechDone(model, result));
         });
     }
 
@@ -231,15 +251,18 @@ impl Downloads {
         let (tx, cancelled) = (self.events.0.clone(), self.cancelled.clone());
         std::thread::spawn(move || {
             let progress_tx = tx.clone();
-            let result = kudu_engine::models::install_smart_model(
-                model,
-                &models,
-                &mut |f| {
-                    let _ = progress_tx.send(DownloadEvent::SmartProgress(f));
-                },
-                &|| cancelled.load(Ordering::SeqCst),
-            );
-            let _ = tx.send(DownloadEvent::SmartDone(model, result.map_err(|e| format!("{e:#}"))));
+            let result = guarded(|| {
+                kudu_engine::models::install_smart_model(
+                    model,
+                    &models,
+                    &mut |f| {
+                        let _ = progress_tx.send(DownloadEvent::SmartProgress(f));
+                    },
+                    &|| cancelled.load(Ordering::SeqCst),
+                )
+                .map_err(|e| format!("{e:#}"))
+            });
+            let _ = tx.send(DownloadEvent::SmartDone(model, result));
         });
     }
 
@@ -278,13 +301,4 @@ impl Downloads {
         }
         controller.idle_status();
     }
-}
-
-fn init_logging(paths: &Paths) {
-    let mut builder = env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"));
-    // Also to a file, so problems on a user's PC can be diagnosed (it never contains dictated text).
-    if let Ok(file) = std::fs::OpenOptions::new().create(true).append(true).open(&paths.log) {
-        builder.target(env_logger::Target::Pipe(Box::new(file)));
-    }
-    let _ = builder.try_init();
 }
