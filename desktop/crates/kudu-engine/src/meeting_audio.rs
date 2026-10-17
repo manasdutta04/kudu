@@ -146,7 +146,7 @@ impl MeetingCapture {
                         carry.extend_from_slice(&bytes[..read]);
                         let whole = carry.len() / 4 * 4;
                         let samples: Vec<f32> =
-                            carry[..whole].chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect();
+                            carry[..whole].as_chunks::<4>().0.iter().map(|b| f32::from_le_bytes(*b)).collect();
                         carry.drain(..whole);
                         receive(&buffers, AudioSource::System, &samples, started);
                     }
