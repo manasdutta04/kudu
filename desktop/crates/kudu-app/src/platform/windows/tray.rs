@@ -17,6 +17,7 @@ const ORANGE: [u8; 3] = [255, 159, 10];
 
 const OPEN_ID: &str = "kudu.open";
 const PASTE_ID: &str = "kudu.paste-last";
+const MEETING_ID: &str = "kudu.meeting";
 const QUIT_ID: &str = "kudu.quit";
 
 struct Tray {
@@ -39,6 +40,7 @@ pub fn start(events: Sender<PlatformEvent>) -> anyhow::Result<()> {
         let action = match event.id().0.as_str() {
             OPEN_ID => TrayAction::OpenWindow,
             PASTE_ID => TrayAction::PasteLast,
+            MEETING_ID => TrayAction::Meeting,
             QUIT_ID => TrayAction::Quit,
             _ => return,
         };
@@ -61,6 +63,7 @@ pub fn start(events: Sender<PlatformEvent>) -> anyhow::Result<()> {
         &status,
         &MenuItem::with_id(OPEN_ID, "Open Kudu", true, None),
         &MenuItem::with_id(PASTE_ID, "Paste last transcript", true, None),
+        &MenuItem::with_id(MEETING_ID, "Start or stop meeting notes", true, None),
         &PredefinedMenuItem::separator(),
         &MenuItem::with_id(QUIT_ID, "Quit Kudu", true, None),
     ])

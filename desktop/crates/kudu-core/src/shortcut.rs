@@ -190,6 +190,10 @@ pub struct Shortcuts {
     pub command: Option<Shortcut>,
     /// Press to paste the last transcript again.
     pub paste_last: Option<Shortcut>,
+    /// Press to start or stop taking meeting notes. Settings saved before meeting notes
+    /// existed get the default; `null` means switched off.
+    #[serde(default = "Shortcuts::default_meeting")]
+    pub meeting: Option<Shortcut>,
 }
 
 impl Shortcuts {
@@ -204,7 +208,18 @@ impl Shortcuts {
                 vec![Modifier::any(Control), Modifier::any(Alt)],
                 Some(Key { code: v_code, label: "V".into() }),
             )),
+            meeting: Self::default_meeting(),
         }
+    }
+
+    /// Ctrl + Alt + N: start or stop meeting notes (N is virtual key 0x4E on Windows, evdev
+    /// key 49 on Linux).
+    pub fn default_meeting() -> Option<Shortcut> {
+        let n_code = if cfg!(windows) { 0x4E } else { 49 };
+        Some(Shortcut::new(
+            vec![Modifier::any(ModifierKind::Control), Modifier::any(ModifierKind::Alt)],
+            Some(Key { code: n_code, label: "N".into() }),
+        ))
     }
 
     /// Problems that make a set of shortcuts unusable, in words for the settings page.
@@ -221,6 +236,11 @@ impl Shortcuts {
         if let Some(paste) = &self.paste_last {
             if *paste == self.dictate || Some(paste) == self.command.as_ref() {
                 problems.push("Paste last transcript needs its own shortcut.".to_string());
+            }
+        }
+        if let Some(meeting) = &self.meeting {
+            if *meeting == self.dictate || Some(meeting) == self.command.as_ref() || Some(meeting) == self.paste_last.as_ref() {
+                problems.push("Meeting notes needs its own shortcut.".to_string());
             }
         }
         problems
@@ -242,6 +262,8 @@ pub enum HotkeyEvent {
     CommandReleased,
     /// The paste-last shortcut was pressed.
     PasteLast,
+    /// The meeting notes shortcut was pressed.
+    Meeting,
 }
 
 /// The matcher's answer to one key event.
@@ -404,6 +426,11 @@ impl Matcher {
             if let Some(paste) = &self.shortcuts.paste_last {
                 if paste.key.as_ref().is_some_and(|k| k.code == code) && paste.modifiers_match(&held) {
                     return Outcome::swallow(vec![HotkeyEvent::PasteLast]);
+                }
+            }
+            if let Some(meeting) = &self.shortcuts.meeting {
+                if meeting.key.as_ref().is_some_and(|k| k.code == code) && meeting.modifiers_match(&held) {
+                    return Outcome::swallow(vec![HotkeyEvent::Meeting]);
                 }
             }
             if let Some(command) = &self.shortcuts.command {
@@ -637,11 +664,38 @@ mod tests {
     }
 
     #[test]
+    fn meeting_is_a_pressed_shortcut() {
+        let (mut m, t) = matcher();
+        let n = Shortcuts::default_meeting().unwrap().key.unwrap().code;
+        m.modifiers_changed(&[l(Control), l(Alt)], t);
+        assert_eq!(m.key_down(n, false, t), Outcome::swallow(vec![HotkeyEvent::Meeting]));
+        let mut off = m.shortcuts.clone();
+        off.meeting = None;
+        m.set_shortcuts(off);
+        m.modifiers_changed(&[], t);
+        m.modifiers_changed(&[l(Control), l(Alt)], t);
+        assert_eq!(m.key_down(n, false, t), Outcome::default());
+    }
+
+    #[test]
+    fn settings_from_before_meeting_notes_get_its_default_but_keep_it_off() {
+        let mut saved = serde_json::to_value(Shortcuts::default_pc(V)).unwrap();
+        saved.as_object_mut().unwrap().remove("meeting");
+        let old: Shortcuts = serde_json::from_value(saved).unwrap();
+        assert_eq!(old.meeting, Shortcuts::default_meeting());
+        let mut off = Shortcuts::default_pc(V);
+        off.meeting = None;
+        let back: Shortcuts = serde_json::from_str(&serde_json::to_string(&off).unwrap()).unwrap();
+        assert_eq!(back.meeting, None);
+    }
+
+    #[test]
     fn a_key_based_dictation_shortcut_holds_and_hides_its_key() {
         let shortcuts = Shortcuts {
             dictate: Shortcut::new(vec![Modifier::any(Alt)], Some(Key { code: SPACE, label: "Space".into() })),
             command: None,
             paste_last: None,
+            meeting: None,
         };
         let mut m = Matcher::new(shortcuts, ESC);
         let t = Instant::now();
@@ -655,7 +709,7 @@ mod tests {
 
     #[test]
     fn a_right_only_shortcut_ignores_the_left_key() {
-        let shortcuts = Shortcuts { dictate: Shortcut::modifiers(&[r(Alt)]), command: None, paste_last: None };
+        let shortcuts = Shortcuts { dictate: Shortcut::modifiers(&[r(Alt)]), command: None, paste_last: None, meeting: None };
         let mut m = Matcher::new(shortcuts, ESC);
         let t = Instant::now();
         assert!(m.modifiers_changed(&[l(Alt)], t).events.is_empty());

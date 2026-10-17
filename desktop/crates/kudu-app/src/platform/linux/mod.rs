@@ -14,6 +14,7 @@ mod focus;
 mod hotkeys;
 mod inject;
 mod keys;
+mod meeting;
 mod overlay;
 mod tray;
 mod util;
@@ -350,6 +351,10 @@ impl Platform for LinuxPlatform {
         }
         std::fs::write(&path, autostart_entry(&exe)).with_context(|| format!("writing {}", path.display()))?;
         Ok(())
+    }
+
+    fn meeting_apps_using_microphone(&self) -> Option<Vec<kudu_core::meeting_apps::MeetingApp>> {
+        meeting::apps_using_microphone()
     }
 
     fn setup_issues(&self) -> Vec<SetupIssue> {

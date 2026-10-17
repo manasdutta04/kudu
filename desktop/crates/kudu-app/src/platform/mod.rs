@@ -35,6 +35,8 @@ pub enum PlatformEvent {
 pub enum TrayAction {
     OpenWindow,
     PasteLast,
+    /// Start or stop meeting notes.
+    Meeting,
     Quit,
 }
 
@@ -139,6 +141,10 @@ pub trait Platform: Send + Sync + 'static {
 
     /// Problems that stop Kudu from working (permissions, missing packages).
     fn setup_issues(&self) -> Vec<SetupIssue>;
+
+    /// The meeting apps using the microphone right now (Kudu excluded), or `None` when this
+    /// system can't tell.
+    fn meeting_apps_using_microphone(&self) -> Option<Vec<kudu_core::meeting_apps::MeetingApp>>;
 }
 
 /// The floating pill near the bottom of the screen. It never takes focus.

@@ -21,6 +21,7 @@ pub enum ShortcutSlot {
     Dictate,
     Command,
     PasteLast,
+    Meeting,
 }
 
 /// Window → background process.
@@ -43,6 +44,13 @@ pub enum Request {
     InstallUpdate,
     SetLaunchAtLogin { enabled: bool },
     PasteLast,
+    /// Start or stop meeting notes.
+    StartMeeting,
+    StopMeeting,
+    /// Write a saved meeting's notes again.
+    RegenerateNotes { id: String },
+    DeleteMeeting { id: String },
+    DeleteAllMeetings,
     Quit,
 }
 
@@ -63,6 +71,25 @@ pub struct Status {
     /// Whether a newer Kudu is out.
     #[serde(default)]
     pub update: UpdateState,
+    /// Meeting notes being taken or written.
+    #[serde(default)]
+    pub meeting: MeetingState,
+    /// Whether this computer can tell when a meeting app uses the microphone.
+    #[serde(default)]
+    pub meeting_detection: bool,
+}
+
+/// Meeting notes, for the window.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "camelCase")]
+pub enum MeetingState {
+    #[default]
+    Idle,
+    /// Recording since `started` (Unix seconds).
+    #[serde(rename_all = "camelCase")]
+    Recording { id: String, started: f64, app: Option<String>, system_audio: bool },
+    /// Writing the notes: `done` of `total` steps.
+    Writing { id: String, done: usize, total: usize },
 }
 
 /// The update check's result, for the window.

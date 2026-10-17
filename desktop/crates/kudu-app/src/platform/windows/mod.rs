@@ -13,6 +13,7 @@ mod clipboard;
 mod hook;
 mod input;
 mod keys;
+mod meeting;
 mod overlay;
 mod tray;
 mod uia;
@@ -166,6 +167,10 @@ impl Platform for WindowsPlatform {
 
     fn set_launch_at_login(&self, enabled: bool) -> anyhow::Result<()> {
         autostart::set(enabled)
+    }
+
+    fn meeting_apps_using_microphone(&self) -> Option<Vec<kudu_core::meeting_apps::MeetingApp>> {
+        meeting::apps_using_microphone()
     }
 
     fn setup_issues(&self) -> Vec<SetupIssue> {

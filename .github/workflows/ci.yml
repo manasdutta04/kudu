@@ -76,6 +76,9 @@ jobs:
       - name: Tests
         run: cargo test --workspace -- --include-ignored
 
+      - name: Writer meeting notes (sample output)
+        run: cargo test -p kudu-engine kudu_writer_writes_meeting_notes -- --include-ignored --nocapture
+
       - name: Lints
         run: cargo clippy --workspace --all-targets -- -D warnings
 

@@ -64,6 +64,8 @@ fn app_icon() -> Option<egui::IconData> {
     Some(egui::IconData { rgba: image.into_raw(), width, height })
 }
 
+// A handful of these pass through per second at most; boxing the status isn't worth it.
+#[allow(clippy::large_enum_variant)]
 enum Message {
     Event(Event),
     /// The background process closed our stdin: it's gone, so the window goes too.
@@ -108,6 +110,7 @@ fn watch_files(paths: Vec<std::path::PathBuf>, sender: Sender<Message>, ctx: egu
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Page {
     Home,
+    Meetings,
     Insights,
     Dictionary,
     Snippets,
@@ -116,11 +119,12 @@ pub enum Page {
 }
 
 impl Page {
-    const ALL: [Page; 6] = [Page::Home, Page::Insights, Page::Dictionary, Page::Snippets, Page::Style, Page::Settings];
+    const ALL: [Page; 7] = [Page::Home, Page::Meetings, Page::Insights, Page::Dictionary, Page::Snippets, Page::Style, Page::Settings];
 
     fn title(self) -> &'static str {
         match self {
             Page::Home => "Home",
+            Page::Meetings => "Meetings",
             Page::Insights => "Insights",
             Page::Dictionary => "Dictionary",
             Page::Snippets => "Snippets",
@@ -132,6 +136,7 @@ impl Page {
     fn icon(self) -> Icon {
         match self {
             Page::Home => Icon::Home,
+            Page::Meetings => Icon::Meetings,
             Page::Insights => Icon::Insights,
             Page::Dictionary => Icon::Dictionary,
             Page::Snippets => Icon::Snippets,
@@ -158,6 +163,7 @@ pub struct App {
     pub home: pages::home::HomeState,
     pub dictionary: pages::lists::ListState,
     pub snippets: pages::lists::ListState,
+    pub meetings: pages::meetings::MeetingsState,
     pub confirm_clear: bool,
 }
 
@@ -178,6 +184,7 @@ impl App {
             home: Default::default(),
             dictionary: Default::default(),
             snippets: Default::default(),
+            meetings: Default::default(),
             confirm_clear: false,
         }
     }
@@ -217,6 +224,7 @@ impl App {
                             ShortcutSlot::Dictate => shortcuts.dictate = shortcut,
                             ShortcutSlot::Command => shortcuts.command = Some(shortcut),
                             ShortcutSlot::PasteLast => shortcuts.paste_last = Some(shortcut),
+                            ShortcutSlot::Meeting => shortcuts.meeting = Some(shortcut),
                         }
                         self.data.settings.shortcuts = Some(shortcuts);
                     }
@@ -297,8 +305,16 @@ impl App {
                 font(13.5, weight),
                 pal.text,
             );
+            let live = page == Page::Meetings
+                && self.status.as_ref().is_some_and(|s| matches!(s.meeting, ipc::MeetingState::Recording { .. }));
+            if live {
+                ui.painter().circle_filled(pos2(row.right() - 14.0, row.center().y), 3.5, pal.red);
+            }
             if response.clicked() {
                 self.page = page;
+                if page == Page::Meetings {
+                    self.meetings.selected = None;
+                }
             }
             ui.add_space(2.0);
         }
@@ -328,6 +344,9 @@ impl App {
         };
         if status.recording {
             return (pal.accent, "Listening…".into());
+        }
+        if matches!(status.meeting, ipc::MeetingState::Recording { .. }) {
+            return (pal.red, "Taking meeting notes".into());
         }
         if let Some(issue) = status.issues.first() {
             return (pal.orange, issue.title.clone());
@@ -366,6 +385,7 @@ impl App {
                     ui.spacing_mut().item_spacing.y = 0.0;
                     match self.page {
                         Page::Home => pages::home::show(self, ui),
+                        Page::Meetings => pages::meetings::show(self, ui),
                         Page::Insights => pages::insights::show(self, ui),
                         Page::Dictionary => pages::lists::dictionary(self, ui),
                         Page::Snippets => pages::lists::snippets(self, ui),

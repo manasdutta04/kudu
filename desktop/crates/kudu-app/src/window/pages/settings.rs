@@ -4,7 +4,7 @@ use eframe::egui::{self, vec2, Color32, Frame, Id, Margin, Modal, Sense, Stroke,
 use kudu_engine::Pack;
 
 use crate::ipc::{ModelStatus, Request, ShortcutSlot, UpdateState};
-use crate::settings::{RecordingMode, Retention};
+use crate::settings::{MeetingAutoStart, RecordingMode, Retention};
 use crate::window::data::{default_shortcuts, grouped};
 use crate::window::icons::{self, Icon};
 use crate::window::theme::{font, Palette, Weight};
@@ -16,11 +16,13 @@ const REPOSITORY: &str = "https://github.com/manasdutta04/kudu";
 const CREDITS: &str = "https://github.com/manasdutta04/kudu#credits";
 
 pub fn show(app: &mut App, ui: &mut Ui) {
-    widgets::page_header(ui, "Settings", "Keys, sounds, models and privacy.");
+    widgets::page_header(ui, "Settings", "Keys, sounds, meeting notes, models and privacy.");
     ui.add_space(24.0);
     shortcuts(app, ui);
     ui.add_space(24.0);
     dictation(app, ui);
+    ui.add_space(24.0);
+    meeting_notes(app, ui);
     ui.add_space(24.0);
     models(app, ui);
     ui.add_space(24.0);
@@ -230,6 +232,72 @@ fn dictation(app: &mut App, ui: &mut Ui) {
             stored.learn_from_corrections = settings.learn_from_corrections;
             stored.screen_context = settings.screen_context;
         });
+        app.send(Request::Reload);
+    }
+}
+
+// MARK: - Meeting notes
+
+fn meeting_notes(app: &mut App, ui: &mut Ui) {
+    let mut meetings = app.data.settings.meetings.clone();
+    let shortcut = app.data.shortcuts().meeting.map(|s| s.keycaps(app.notation));
+    let detection = app.status.as_ref().is_some_and(|s| s.meeting_detection);
+    let footer = meetings.enabled.then_some(
+        "Let people know you're taking notes. Transcripts and notes stay on this computer, on the Meetings page; the audio is never saved.",
+    );
+    let mut turned_on = false;
+    widgets::section(ui, "Meeting notes", footer, |ui| {
+        widgets::row(
+            ui,
+            "Take notes in meetings",
+            Some("Transcribes your calls on this computer and writes up the summary and action items."),
+            meetings.enabled,
+            |ui| {
+                let was = meetings.enabled;
+                widgets::switch(ui, &mut meetings.enabled);
+                turned_on = !was && meetings.enabled;
+            },
+        );
+        if !meetings.enabled {
+            return;
+        }
+        editable_shortcut(app, ui, "Start or stop notes", None, ShortcutSlot::Meeting, shortcut);
+        let detail = if detection || meetings.auto_start == MeetingAutoStart::Off {
+            "Kudu notices Zoom, Teams, Webex, Slack and browser calls using the microphone."
+        } else if cfg!(windows) {
+            "This computer doesn't report which apps use the microphone, so use the shortcut."
+        } else {
+            "Needs PulseAudio or PipeWire (pactl) to notice calls; otherwise use the shortcut."
+        };
+        widgets::row(ui, "When a meeting starts", Some(detail), true, |ui| {
+            let titles: Vec<String> = MeetingAutoStart::ALL.iter().map(|m| m.title().to_string()).collect();
+            let selected = MeetingAutoStart::ALL.iter().position(|m| *m == meetings.auto_start);
+            if let Some(index) = widgets::value_menu(ui, Id::new("meeting-auto-start"), &titles, selected, "Choose") {
+                meetings.auto_start = MeetingAutoStart::ALL[index];
+            }
+        });
+        let others = if cfg!(windows) {
+            "Records what the computer plays as well as your microphone, so everyone is in the transcript."
+        } else {
+            "Records what the computer plays (needs parec from pulseaudio-utils) as well as your microphone."
+        };
+        widgets::row(ui, "Include the other people", Some(others), true, |ui| {
+            widgets::switch(ui, &mut meetings.system_audio);
+        });
+        let pal = Palette::of(ui);
+        widgets::row(ui, "Notes written by", None, false, |ui| {
+            let label = if WRITER { "The Kudu writer model, on this computer" } else { "Basic notes (no writer model)" };
+            ui.label(text(label, 12.0, Weight::Medium, if WRITER { pal.accent } else { pal.secondary }));
+        });
+    });
+    if turned_on {
+        // Turning it on goes through the reminder about consent on the Meetings page.
+        app.page = crate::window::Page::Meetings;
+        app.meetings.consent = true;
+        return;
+    }
+    if meetings != app.data.settings.meetings {
+        app.data.update_settings(|stored| stored.meetings = meetings.clone());
         app.send(Request::Reload);
     }
 }

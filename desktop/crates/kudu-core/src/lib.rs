@@ -13,6 +13,9 @@ pub mod formatting_guard;
 pub mod formatting_need;
 pub mod id;
 pub mod insights;
+pub mod meeting;
+pub mod meeting_apps;
+pub mod meeting_notes;
 pub mod pipeline;
 pub mod release_version;
 pub mod sentence_chunker;
@@ -21,6 +24,7 @@ pub mod stages;
 pub mod string_casing;
 pub mod term_extractor;
 pub mod term_speller;
+pub mod transcript_assembler;
 pub mod usage_stats;
 pub mod writing_style;
 

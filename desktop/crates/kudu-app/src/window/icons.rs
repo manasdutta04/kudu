@@ -35,6 +35,11 @@ pub enum Icon {
     Clock,
     Warning,
     Download,
+    Meetings,
+    ChevronLeft,
+    ChevronRight,
+    Circle,
+    Dot,
 }
 
 /// Draws `icon` centered in `rect` (designed on a 16 × 16 grid).
@@ -134,6 +139,21 @@ pub fn paint(painter: &Painter, rect: Rect, icon: Icon, color: Color32) {
             line(vec![p(4.8, 9.6), p(8.0, 12.6), p(11.2, 9.6)]);
         }
         Icon::Check => line(vec![p(3.2, 8.4), p(6.6, 11.6), p(12.8, 4.6)]),
+        Icon::Meetings => {
+            // Two people side by side.
+            painter.circle_stroke(p(5.6, 5.4), 2.2 * s, stroke);
+            line(vec![p(1.6, 13.2), p(1.9, 11.4), p(3.2, 9.8), p(5.6, 9.2), p(8.0, 9.8), p(9.3, 11.4), p(9.6, 13.2)]);
+            painter.circle_stroke(p(11.0, 4.6), 1.9 * s, stroke);
+            line(vec![p(10.6, 8.3), p(12.8, 8.6), p(14.1, 9.9), p(14.4, 11.8)]);
+        }
+        Icon::ChevronLeft => line(vec![p(10.0, 3.0), p(5.0, 8.0), p(10.0, 13.0)]),
+        Icon::ChevronRight => line(vec![p(6.0, 3.0), p(11.0, 8.0), p(6.0, 13.0)]),
+        Icon::Circle => {
+            painter.circle_stroke(p(8.0, 8.0), 5.0 * s, stroke);
+        }
+        Icon::Dot => {
+            painter.circle_filled(p(8.0, 8.0), 2.6 * s, color);
+        }
         Icon::Sparkle => sparkle(painter, p(8.0, 8.0), 6.5 * s, color),
         Icon::ArrowRight => {
             line(vec![p(2.5, 8.0), p(13.0, 8.0)]);

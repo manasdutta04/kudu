@@ -3,6 +3,7 @@
 
 mod daemon;
 mod ipc;
+mod meetings;
 mod overlay;
 mod paths;
 mod platform;

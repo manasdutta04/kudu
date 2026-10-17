@@ -68,6 +68,47 @@ impl Retention {
     }
 }
 
+/// What Kudu does when it notices a meeting starting.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum MeetingAutoStart {
+    /// Nothing: notes start only with the shortcut, the tray or the Meetings page.
+    #[default]
+    Off,
+    /// Shows a hint with the shortcut.
+    Ask,
+    /// Starts taking notes, and stops when the meeting ends.
+    Automatic,
+}
+
+impl MeetingAutoStart {
+    pub const ALL: [MeetingAutoStart; 3] = [MeetingAutoStart::Off, MeetingAutoStart::Ask, MeetingAutoStart::Automatic];
+
+    pub fn title(self) -> &'static str {
+        match self {
+            MeetingAutoStart::Off => "Do nothing",
+            MeetingAutoStart::Ask => "Remind me",
+            MeetingAutoStart::Automatic => "Start taking notes",
+        }
+    }
+}
+
+/// Meeting notes: off until the user turns them on.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct MeetingSettings {
+    pub enabled: bool,
+    pub auto_start: MeetingAutoStart,
+    /// Record the computer's sound too (the other people in the call), not only the microphone.
+    pub system_audio: bool,
+}
+
+impl Default for MeetingSettings {
+    fn default() -> Self {
+        Self { enabled: false, auto_start: MeetingAutoStart::Off, system_audio: true }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -94,6 +135,7 @@ pub struct Settings {
     pub onboarded: bool,
     /// Check once a day whether a newer Kudu has been released.
     pub check_updates: bool,
+    pub meetings: MeetingSettings,
 }
 
 impl Default for Settings {
@@ -111,6 +153,7 @@ impl Default for Settings {
             retention: Retention::default(),
             onboarded: false,
             check_updates: true,
+            meetings: MeetingSettings::default(),
         }
     }
 }

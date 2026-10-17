@@ -20,11 +20,13 @@ use parking_lot::Mutex;
 use super::learning::EditObserver;
 use super::levels::Levels;
 use super::store::Store;
-use super::worker::{DictationPlan, Finished, Job, Outcome};
+use super::worker::{DictationPlan, Finished, Job, MeetingJob, Outcome};
 use crate::ipc::{Event, ModelStatus, ShortcutSlot};
 use crate::overlay::OverlayState;
 use crate::platform::{FocusedApp, Platform, TrayState};
 use crate::settings::RecordingMode;
+
+mod meeting;
 
 /// Holds shorter than this are taps (hands-free gestures), not dictations.
 const MINIMUM_HOLD: Duration = Duration::from_millis(250);
@@ -52,6 +54,9 @@ pub struct Controller {
     pub update: crate::ipc::UpdateState,
     pub hotkeys_active: bool,
     jobs: Sender<Job>,
+    meeting_jobs: Sender<MeetingJob>,
+    /// Meeting notes being taken or written.
+    meetings: meeting::MeetingNotesState,
     learned: Sender<Vec<LearnedCorrection>>,
     window: Sender<Event>,
     recorder: Recorder,
@@ -73,10 +78,11 @@ impl Controller {
         platform: Arc<dyn Platform>,
         store: Store,
         jobs: Sender<Job>,
+        meeting_jobs: Sender<MeetingJob>,
         learned: Sender<Vec<LearnedCorrection>>,
         window: Sender<Event>,
     ) -> Self {
-        let shortcuts = store.settings.shortcuts.clone().unwrap_or_else(|| platform.default_shortcuts());
+        let shortcuts = listened_shortcuts(&store.settings, platform.as_ref());
         let matcher = Arc::new(Mutex::new(Matcher::new(shortcuts, platform.escape_code())));
         let mut recorder = Recorder::new();
         recorder.set_device(store.settings.microphone.clone());
@@ -89,6 +95,8 @@ impl Controller {
             update: crate::ipc::UpdateState::Idle,
             hotkeys_active: false,
             jobs,
+            meeting_jobs,
+            meetings: meeting::MeetingNotesState::default(),
             learned,
             window,
             recorder,
@@ -114,11 +122,19 @@ impl Controller {
 
     /// Settings changed on disk (the window saved them).
     pub fn settings_reloaded(&mut self) {
-        let shortcuts = self.store.settings.shortcuts.clone().unwrap_or_else(|| self.platform.default_shortcuts());
+        let shortcuts = listened_shortcuts(&self.store.settings, self.platform.as_ref());
         if self.matcher.lock().shortcuts != shortcuts {
             self.matcher.lock().set_shortcuts(shortcuts);
         }
         self.recorder.set_device(self.store.settings.microphone.clone());
+        self.meeting_settings_changed();
+        self.refresh_tray();
+    }
+
+    /// The shortcuts as saved (or the platform's defaults), including a switched-off meeting
+    /// shortcut, for changing one of them.
+    fn saved_shortcuts(&self) -> Shortcuts {
+        self.store.settings.shortcuts.clone().unwrap_or_else(|| self.platform.default_shortcuts())
     }
 
     // MARK: - Shortcuts
@@ -163,6 +179,7 @@ impl Controller {
                 }
             }
             HotkeyEvent::PasteLast => self.paste_last(),
+            HotkeyEvent::Meeting => self.toggle_meeting(),
         }
     }
 
@@ -219,6 +236,7 @@ impl Controller {
             log::error!("Couldn't start the microphone: {error:#}");
             return self.flash("Microphone unavailable");
         }
+        self.set_meeting_mic_muted(true);
         if self.store.settings.sounds {
             sounds::play(Cue::Start);
         }
@@ -288,6 +306,7 @@ impl Controller {
     /// Called a few times a second while recording: sends finished phrases to the worker, so
     /// only the last few seconds are left when the user lets go.
     pub fn tick(&mut self) {
+        self.meeting_tick();
         let Some(active) = &mut self.active else { return };
         if active.command {
             return;
@@ -364,18 +383,29 @@ impl Controller {
 
     /// Refreshes the tray and the window's status after a model or setting changed.
     pub fn idle_status(&mut self) {
-        if self.active.is_none() && !self.busy {
-            let state = if self.speech == ModelStatus::Ready { TrayState::Idle } else { TrayState::NeedsSetup };
-            self.platform.set_tray_state(state, &self.tooltip());
-        }
+        self.refresh_tray();
         self.send_status();
     }
 
     fn idle(&mut self) {
         self.busy = false;
-        let state = if self.speech == ModelStatus::Ready { TrayState::Idle } else { TrayState::NeedsSetup };
-        self.platform.set_tray_state(state, &self.tooltip());
+        self.set_meeting_mic_muted(false);
+        self.refresh_tray();
         self.send_status();
+    }
+
+    /// The tray icon when no dictation is in progress: a red dot while meeting notes are
+    /// being taken.
+    fn refresh_tray(&self) {
+        if self.active.is_some() || self.busy {
+            return;
+        }
+        if self.meeting_is_recording() {
+            self.platform.set_tray_state(TrayState::Recording, "Kudu is taking meeting notes");
+        } else {
+            let state = if self.speech == ModelStatus::Ready { TrayState::Idle } else { TrayState::NeedsSetup };
+            self.platform.set_tray_state(state, &self.tooltip());
+        }
     }
 
     pub fn tooltip(&self) -> String {
@@ -393,6 +423,8 @@ impl Controller {
 
     pub fn worker_outcome(&mut self, outcome: Outcome) {
         match outcome {
+            Outcome::MeetingText { id, source, start, end, text } => self.meeting_text(id, source, start, end, text),
+            Outcome::MeetingChat { id, step, reply } => self.meeting_chat(id, step, reply),
             Outcome::SpeechLoaded(result) => {
                 self.speech = match result {
                     Ok(_) => ModelStatus::Ready,
@@ -552,7 +584,11 @@ impl Controller {
 
     fn apply(&mut self, slot: ShortcutSlot, shortcut: Shortcut) -> Result<(), String> {
         let notation = self.platform.notation();
-        if slot != ShortcutSlot::PasteLast {
+        if slot == ShortcutSlot::Meeting {
+            if shortcut.is_modifier_only() {
+                return Err("Meeting notes needs a key, like Ctrl + Alt + N.".into());
+            }
+        } else if slot != ShortcutSlot::PasteLast {
             let platform = self.platform.clone();
             if !shortcut.is_usable_for_holding(|code| platform.key_types_text(code)) {
                 return Err(format!(
@@ -563,17 +599,18 @@ impl Controller {
         } else if shortcut.is_modifier_only() {
             return Err("Paste last transcript needs a key, like Ctrl + Alt + V.".into());
         }
-        let mut shortcuts = self.shortcuts();
+        let mut shortcuts = self.saved_shortcuts();
         match slot {
             ShortcutSlot::Dictate => shortcuts.dictate = shortcut,
             ShortcutSlot::Command => shortcuts.command = Some(shortcut),
             ShortcutSlot::PasteLast => shortcuts.paste_last = Some(shortcut),
+            ShortcutSlot::Meeting => shortcuts.meeting = Some(shortcut),
         }
         if let Some(problem) = shortcuts.problems().into_iter().next() {
             return Err(problem);
         }
-        self.matcher.lock().set_shortcuts(shortcuts.clone());
         self.store.settings.shortcuts = Some(shortcuts);
+        self.matcher.lock().set_shortcuts(listened_shortcuts(&self.store.settings, self.platform.as_ref()));
         self.store.save_settings();
         self.platform.set_tray_state(TrayState::Idle, &self.tooltip());
         Ok(())
@@ -621,6 +658,18 @@ impl Controller {
                 .collect(),
             platform: if cfg!(windows) { "windows".into() } else { "linux".into() },
             update: self.update.clone(),
+            meeting: self.meeting_state(),
+            meeting_detection: self.meetings.detection_available,
         }
     }
+}
+
+/// The shortcuts the keyboard listener matches: the meeting shortcut only while meeting notes
+/// are on, so Ctrl + Alt + N keeps working in other apps otherwise.
+fn listened_shortcuts(settings: &crate::settings::Settings, platform: &dyn Platform) -> Shortcuts {
+    let mut shortcuts = settings.shortcuts.clone().unwrap_or_else(|| platform.default_shortcuts());
+    if !settings.meetings.enabled {
+        shortcuts.meeting = None;
+    }
+    shortcuts
 }

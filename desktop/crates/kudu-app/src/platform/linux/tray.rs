@@ -131,6 +131,12 @@ impl ksni::Tray for KuduTray {
                 ..Default::default()
             }
             .into(),
+            StandardItem {
+                label: "Start or stop meeting notes".into(),
+                activate: Box::new(|tray: &mut Self| tray.send(TrayAction::Meeting)),
+                ..Default::default()
+            }
+            .into(),
             MenuItem::Separator,
             StandardItem {
                 label: "Quit Kudu".into(),

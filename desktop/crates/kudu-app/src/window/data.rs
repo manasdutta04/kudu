@@ -51,6 +51,9 @@ pub struct Data {
     pub writer_installed: Vec<WriterModel>,
     /// Bumped whenever the history changes, for cached views of it.
     pub history_version: u64,
+    /// Saved meetings, newest first, and a counter bumped when they're read again.
+    pub meetings: Vec<kudu_core::meeting::Meeting>,
+    pub meetings_version: u64,
     stamps: [Option<SystemTime>; 6],
 }
 
@@ -73,8 +76,11 @@ impl Data {
             speech_installed: Vec::new(),
             writer_installed: Vec::new(),
             history_version: 0,
+            meetings: Vec::new(),
+            meetings_version: 0,
             stamps: [None; 6],
         };
+        data.reload_meetings();
         for file in FILES {
             data.read(file);
         }
@@ -138,6 +144,12 @@ impl Data {
         for file in [File::History, File::Usage, File::Dictionary] {
             self.read(file);
         }
+        self.reload_meetings();
+    }
+
+    pub fn reload_meetings(&mut self) {
+        self.meetings = crate::meetings::list(&self.paths.data);
+        self.meetings_version += 1;
     }
 
     pub fn check_models(&mut self) {

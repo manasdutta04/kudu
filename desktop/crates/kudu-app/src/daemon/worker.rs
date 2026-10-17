@@ -1,6 +1,9 @@
 //! The worker thread: owns the speech model and the small language model, and turns audio
 //! into finished text. Jobs run in order, so the pieces of a dictation transcribed while the
 //! user is still speaking are always stitched before its final part.
+//!
+//! Meeting notes have their own queue, served only when no dictation job is waiting, so a
+//! dictation during a meeting is never stuck behind it.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -11,6 +14,7 @@ use kudu_core::{
     command_output, AppCategory, DictionaryStage, EditingStrength, SnippetStage, TermSpeller,
     TextContext, TextPipeline, TextStage,
 };
+use kudu_core::meeting::AudioSource;
 use kudu_engine::segmenter::{stitch, stitch_timed};
 use kudu_engine::{SpeechEngine, SpeechModel, WriterModel};
 use parking_lot::Mutex;
@@ -50,7 +54,19 @@ pub enum Job {
     Cancel { session: u64 },
 }
 
+/// Meeting notes work, run between dictations.
+pub enum MeetingJob {
+    /// A piece of a meeting (16 kHz).
+    Transcribe { id: String, source: AudioSource, start: f64, end: f64, samples: Vec<f32> },
+    /// One step of writing a meeting's notes with the writer model.
+    Chat { id: String, step: usize, system: &'static str, user: String, max_tokens: usize },
+}
+
 pub enum Outcome {
+    /// A transcribed piece of a meeting.
+    MeetingText { id: String, source: AudioSource, start: f64, end: f64, text: String },
+    /// The writer's reply for a step of a meeting's notes (`None`: no writer, or it failed).
+    MeetingChat { id: String, step: usize, reply: Option<String> },
     SpeechLoaded(Result<SpeechModel, String>),
     SmartLoaded(Result<WriterModel, String>),
     Dictation(Finished),
@@ -59,6 +75,11 @@ pub enum Outcome {
     NothingHeard,
     /// A job failed unexpectedly.
     Failed(String),
+}
+
+enum Next {
+    Job(Job),
+    Meeting(MeetingJob),
 }
 
 pub struct Finished {
@@ -72,13 +93,14 @@ pub struct Finished {
     pub category: AppCategory,
 }
 
-pub fn spawn(results: Sender<Outcome>) -> Sender<Job> {
+pub fn spawn(results: Sender<Outcome>) -> (Sender<Job>, Sender<MeetingJob>) {
     let (jobs, receiver) = crossbeam_channel::unbounded();
+    let (meeting_jobs, meeting_receiver) = crossbeam_channel::unbounded();
     std::thread::Builder::new()
         .name("kudu-worker".into())
-        .spawn(move || Worker::default().run(receiver, results))
+        .spawn(move || Worker::default().run(receiver, meeting_receiver, results))
         .expect("worker thread");
-    jobs
+    (jobs, meeting_jobs)
 }
 
 #[derive(Default)]
@@ -91,12 +113,26 @@ struct Worker {
 }
 
 impl Worker {
-    fn run(mut self, jobs: Receiver<Job>, results: Sender<Outcome>) {
+    fn run(mut self, jobs: Receiver<Job>, meeting_jobs: Receiver<MeetingJob>, results: Sender<Outcome>) {
         vocabulary::preload();
-        for job in jobs {
+        loop {
+            // Dictation first; meeting work only when no dictation job is waiting.
+            let next = match jobs.try_recv() {
+                Ok(job) => Next::Job(job),
+                Err(_) => match meeting_jobs.try_recv() {
+                    Ok(job) => Next::Meeting(job),
+                    Err(_) => crossbeam_channel::select! {
+                        recv(jobs) -> job => match job { Ok(job) => Next::Job(job), Err(_) => break },
+                        recv(meeting_jobs) -> job => match job { Ok(job) => Next::Meeting(job), Err(_) => continue },
+                    },
+                },
+            };
             // A crash in one job (a model that won't load, an odd recording) is reported and
             // the worker carries on with the next one.
-            let outcome = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.handle(job))) {
+            let outcome = match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match next {
+                Next::Job(job) => self.handle(job),
+                Next::Meeting(job) => Some(self.meeting(job)),
+            })) {
                 Ok(outcome) => outcome,
                 Err(_) => {
                     self.text.clear();
@@ -109,6 +145,41 @@ impl Worker {
                 }
             }
         }
+    }
+
+    fn meeting(&mut self, job: MeetingJob) -> Outcome {
+        match job {
+            // A failure here must still answer, so the meeting doesn't wait for it forever.
+            MeetingJob::Transcribe { id, source, start, end, samples } => {
+                let speech = self.speech.as_ref();
+                let text = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| speech.map(|s| s.transcribe(&samples))))
+                    .ok()
+                    .flatten()
+                    .unwrap_or_default();
+                Outcome::MeetingText { id, source, start, end, text }
+            }
+            MeetingJob::Chat { id, step, system, user, max_tokens } => {
+                let reply = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.chat(system, &user, max_tokens))).ok().flatten();
+                Outcome::MeetingChat { id, step, reply }
+            }
+        }
+    }
+
+    #[cfg(feature = "smart")]
+    fn chat(&self, system: &str, user: &str, max_tokens: usize) -> Option<String> {
+        let smart = self.smart.as_ref()?;
+        match smart.chat(system, user, max_tokens, Duration::from_secs(150)) {
+            Ok(reply) => Some(reply),
+            Err(error) => {
+                log::warn!("The writer couldn't write meeting notes: {error:#}");
+                None
+            }
+        }
+    }
+
+    #[cfg(not(feature = "smart"))]
+    fn chat(&self, _system: &str, _user: &str, _max_tokens: usize) -> Option<String> {
+        None
     }
 
     fn handle(&mut self, job: Job) -> Option<Outcome> {

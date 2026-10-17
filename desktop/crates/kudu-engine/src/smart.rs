@@ -70,6 +70,12 @@ impl SmartFormatter {
         accepted
     }
 
+    /// One free-form turn with the writer (meeting notes): `system` instructions and the `user`
+    /// message, up to `max_tokens` and `timeout`.
+    pub fn chat(&self, system: &str, user: &str, max_tokens: usize, timeout: Duration) -> Result<String> {
+        self.model.chat(system, user, max_tokens, timeout)
+    }
+
     /// Command mode: applies a spoken instruction to the selected text, or drafts new text when
     /// nothing is selected.
     pub fn command(&self, instruction: &str, selection: Option<&str>, category: AppCategory) -> Result<String> {
@@ -217,6 +223,34 @@ mod tests {
         let kept = formatting_guard::accept(&request.text, &reply, request.strength);
         assert!(kept.is_some(), "the guard rejected: {reply}");
         assert!(reply.contains('•') || reply.contains("1."), "not a list: {reply}");
+    }
+
+    /// Has kudu-writer-tiny write meeting notes for a short transcript and prints what came
+    /// back, and whether Kudu could use it (otherwise the app falls back to its rule-based
+    /// notes). Informational: a small formatting model may not manage it. CI only.
+    #[test]
+    #[ignore = "downloads a writer model"]
+    fn kudu_writer_writes_meeting_notes() {
+        use crate::models::{install_writer, WriterModel};
+        use kudu_core::meeting_notes;
+        let dir = std::env::temp_dir().join("kudu-writer-test");
+        let model = WriterModel::Tiny;
+        if !model.is_installed(&dir) {
+            install_writer(model, &dir, &mut |_| {}, &|| false).expect("download");
+        }
+        let formatter = SmartFormatter::load(&model.path(&dir), model.short_prompt()).expect("load");
+        let transcript = "Others: Hi everyone, thanks for joining. Today we need to settle the launch date for the new billing page. The review found two blocking bugs in the checkout flow.\n\
+You: Thanks. I looked at both bugs this morning. The login timeout one is easy, I'll fix it by Friday. The tax rounding bug needs help from the payments team.\n\
+Others: Okay. Then let's move the launch to next Tuesday instead of Thursday. Can you also send the updated deck to Sakshi before the call with finance?\n\
+You: Yes, we agreed on Tuesday. I will send the deck to Sakshi tomorrow and ask Priya from payments to look at the rounding bug.";
+        let start = std::time::Instant::now();
+        let reply = formatter
+            .chat(meeting_notes::NOTES_INSTRUCTIONS, &meeting_notes::notes_prompt(transcript), 520, Duration::from_secs(300))
+            .expect("reply");
+        let parsed = meeting_notes::parse(&reply, kudu_core::meeting::NotesGenerator::KuduWriter);
+        let usable = parsed.as_ref().is_some_and(|(_, notes)| meeting_notes::is_usable(notes, kudu_core::word_count(transcript)));
+        println!("Meeting notes in {:.1} s, usable: {usable}\n{reply}", start.elapsed().as_secs_f32());
+        assert!(!reply.trim().is_empty());
     }
 
     #[test]

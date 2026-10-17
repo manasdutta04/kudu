@@ -37,14 +37,14 @@ pub fn run(args: &[String], paths: Paths) -> Result<()> {
     let (platform_tx, platform_rx) = unbounded::<PlatformEvent>();
     let platform = platform::current(platform_tx.clone())?;
     let (outcome_tx, outcome_rx) = unbounded();
-    let jobs = worker::spawn(outcome_tx);
+    let (jobs, meeting_jobs) = worker::spawn(outcome_tx);
     let (learned_tx, learned_rx) = unbounded();
     let (open_tx, open_rx) = unbounded::<()>();
     let window = window::Window::new(paths.config.clone());
     let store = Store::load(paths);
     store.prune_history();
 
-    let mut controller = Controller::new(platform.clone(), store, jobs.clone(), learned_tx, window.events());
+    let mut controller = Controller::new(platform.clone(), store, jobs.clone(), meeting_jobs, learned_tx, window.events());
     ipc::serve_instance(instance, move || {
         let _ = open_tx.send(());
     });
@@ -111,6 +111,7 @@ pub fn run(args: &[String], paths: Paths) -> Result<()> {
                     controller.refresh_microphones();
                 }
                 Ok(PlatformEvent::Tray(TrayAction::PasteLast)) => controller.paste_last(),
+                Ok(PlatformEvent::Tray(TrayAction::Meeting)) => controller.toggle_meeting(),
                 Ok(PlatformEvent::Tray(TrayAction::Quit)) => break,
                 Err(_) => break,
             },
@@ -219,6 +220,15 @@ fn handle_request(
             controller.send_status();
         }
         Request::PasteLast => controller.paste_last(),
+        Request::StartMeeting => {
+            if !controller.meeting_is_recording() {
+                controller.toggle_meeting();
+            }
+        }
+        Request::StopMeeting => controller.stop_meeting(),
+        Request::RegenerateNotes { id } => controller.regenerate_notes(id),
+        Request::DeleteMeeting { id } => controller.delete_meeting(&id),
+        Request::DeleteAllMeetings => controller.delete_all_meetings(),
         Request::Quit => {}
     }
 }

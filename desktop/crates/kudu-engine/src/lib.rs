@@ -4,6 +4,7 @@
 
 pub mod asr;
 pub mod audio;
+pub mod meeting_audio;
 pub mod models;
 pub mod prompts;
 pub mod resample;
