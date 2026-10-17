@@ -46,6 +46,63 @@ if arguments.first == "--command", arguments.count >= 2 {
     }
     exit(0)
 }
+if arguments.first == "--capture-system", arguments.count >= 2, let seconds = Double(arguments[1]) {
+    // Records the Mac's sound for a while through the meeting tap, and transcribes it.
+    let engine = ParakeetEngine()
+    try await engine.load(SpeechModel.allCases.first { $0.isDownloaded } ?? .base)
+    let capture = MeetingCapture()
+    try capture.start(includeSystemAudio: true, microphoneUID: nil, includeMicrophone: false)
+    print("System audio tap: \(capture.hasSystemAudio)")
+    try await Task.sleep(for: .seconds(seconds))
+    capture.stop()
+    for piece in capture.takePieces(final: true) {
+        let peak = piece.samples.map(abs).max() ?? 0
+        let text = SpeechChunker.hasSpeech(piece.samples) ? try await engine.transcribe(piece.samples) : "(quiet)"
+        print(String(format: "[%.1f–%.1f s, peak %.3f] ", piece.start, piece.end, peak) + text)
+    }
+    exit(0)
+}
+if arguments.first == "--meeting", arguments.count >= 2 {
+    // A pretend meeting: each clip is one turn, alternating between the other people and
+    // you, with a pause between turns. Runs the meeting path: pause cuts, transcription,
+    // and the notes.
+    let engine = ParakeetEngine()
+    try await engine.load(SpeechModel.allCases.first { $0.isDownloaded } ?? .base)
+    var audio: [(AudioSource, [Float])] = []
+    for (index, path) in arguments.dropFirst().enumerated() {
+        audio.append((index % 2 == 0 ? .system : .mic, try loadSamples(URL(fileURLWithPath: path))))
+    }
+    var segments: [MeetingSegment] = []
+    var clock = 0.0
+    let chunker = SpeechChunker()
+    for (source, samples) in audio {
+        var rest = samples + [Float](repeating: 0, count: 16_000)
+        var offset = clock
+        while !rest.isEmpty {
+            let cut = chunker.nextCut(rest) ?? rest.count
+            let piece = Array(rest[..<cut])
+            rest.removeFirst(cut)
+            if SpeechChunker.hasSpeech(piece) {
+                let text = try await engine.transcribe(piece)
+                segments.append(MeetingSegment(start: offset, end: offset + Double(piece.count) / 16_000, source: source, text: text))
+            }
+            offset += Double(piece.count) / 16_000
+        }
+        clock = offset
+    }
+    print(MeetingFormat.transcriptText(segments, labelled: true))
+    let writer = await MeetingNotesWriter()
+    print("\nApple Intelligence: \(await writer.usesModel)")
+    let start = ContinuousClock.now
+    let (title, notes) = await writer.write(segments, heardOthers: true) { done, total in print("  step \(done)/\(total)") }
+    print(String(format: "Notes in %.1f s (%@)", (ContinuousClock.now - start) / .seconds(1), notes.generator.rawValue))
+    print("TITLE: \(title ?? "-")\nSUMMARY: \(notes.summary)")
+    for (name, items) in [("KEY POINTS", notes.keyPoints), ("DECISIONS", notes.decisions), ("ACTIONS", notes.actions)] {
+        print(name + ":")
+        items.forEach { print("  - " + $0) }
+    }
+    exit(0)
+}
 let streamMode = arguments.contains("--stream")
 let formatting = arguments.contains("--format") || streamMode
 let textMode = arguments.contains("--text")

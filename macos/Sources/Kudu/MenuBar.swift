@@ -14,6 +14,9 @@ final class MenuBarIconAnimator: ObservableObject {
     private var timer: Timer?
     private var phase: Double = 0
     private var subscription: AnyCancellable?
+    private var meetingSubscription: AnyCancellable?
+    /// Meeting notes are being taken: the mark carries a dot.
+    private var meeting = false
 
     init(controller: DictationController) {
         self.controller = controller
@@ -23,6 +26,27 @@ final class MenuBarIconAnimator: ObservableObject {
             .sink { [weak self] recording, transcribing in
                 self?.setAnimating(recording || transcribing)
             }
+        meetingSubscription = controller.meetings.$state
+            .map { if case .recording = $0 { true } else { false } }
+            .removeDuplicates()
+            .sink { [weak self] recording in
+                guard let self else { return }
+                self.meeting = recording
+                if self.timer == nil { self.image = self.marked(KuduMark.image(size: Self.size, template: true)) }
+            }
+    }
+
+    /// Adds a recording dot in the corner while meeting notes are on.
+    private func marked(_ mark: NSImage) -> NSImage {
+        guard meeting else { return mark }
+        let image = NSImage(size: Self.size, flipped: false) { rect in
+            mark.draw(in: rect)
+            NSColor.black.setFill()
+            NSBezierPath(ovalIn: NSRect(x: rect.maxX - 6, y: rect.maxY - 6, width: 6, height: 6)).fill()
+            return true
+        }
+        image.isTemplate = true
+        return image
     }
 
     private func setAnimating(_ animating: Bool) {
@@ -37,7 +61,7 @@ final class MenuBarIconAnimator: ObservableObject {
         } else {
             timer?.invalidate()
             timer = nil
-            image = KuduMark.image(size: Self.size, template: true)
+            image = marked(KuduMark.image(size: Self.size, template: true))
         }
     }
 
@@ -51,7 +75,7 @@ final class MenuBarIconAnimator: ObservableObject {
             phase += 0.45
             levels = (0..<3).map { 0.5 + 0.35 * CGFloat(sin(phase - Double($0) * 0.9)) }
         }
-        image = KuduMark.image(size: Self.size, barLevels: levels, template: true)
+        image = marked(KuduMark.image(size: Self.size, barLevels: levels, template: true))
     }
 }
 
@@ -73,6 +97,7 @@ struct MenuBarLabel: View {
 /// macOS (keyboard navigation, checkmarks, submenus).
 struct MenuContent: View {
     @ObservedObject var controller: DictationController
+    @ObservedObject var meetings: MeetingRecorder
     @ObservedObject var history: HistoryStore
     @ObservedObject var store: UserDataStore
     @ObservedObject var navigation: Navigation
@@ -87,6 +112,17 @@ struct MenuContent: View {
         Button("Paste last transcript") { controller.pasteLastTranscript() }
             .keyboardShortcut(Self.menuShortcut(controller.shortcuts.pasteLast))
             .disabled(history.records.isEmpty)
+        if controller.meetingNotesEnabled {
+            if case let .recording(meeting) = meetings.state {
+                Button("Stop meeting notes (\(MeetingFormat.clock(meeting.duration())))") { Task { await controller.stopMeeting() } }
+                    .keyboardShortcut(Self.menuShortcut(controller.shortcuts.meeting))
+            } else {
+                Button("Take meeting notes") { Task { await controller.startMeeting() } }
+                    .keyboardShortcut(Self.menuShortcut(controller.shortcuts.meeting))
+                    .disabled(controller.meetingBlocker != nil || meetings.state != .idle)
+            }
+            Button("Meetings…") { show(.meetings) }
+        }
 
         Divider()
 

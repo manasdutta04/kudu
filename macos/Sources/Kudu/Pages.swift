@@ -16,7 +16,7 @@ private final class Draft: ObservableObject {
 }
 
 /// Scrollable page body with the shared margins.
-private struct PageScroll<Content: View>: View {
+struct PageScroll<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
@@ -33,7 +33,7 @@ private struct PageScroll<Content: View>: View {
 }
 
 /// A titled group of rows inside a card, like a grouped settings section.
-private struct Section<Content: View>: View {
+struct Section<Content: View>: View {
     let title: String
     var footer: String?
     @ViewBuilder let content: () -> Content
@@ -56,7 +56,7 @@ private struct Section<Content: View>: View {
 }
 
 /// One row in a `Section`: a label (with optional detail) and a control.
-private struct Row<Control: View>: View {
+struct Row<Control: View>: View {
     let title: String
     var detail: String?
     var divider = true
@@ -83,7 +83,7 @@ private struct Row<Control: View>: View {
 }
 
 /// A switch in the app's accent color.
-private struct AccentSwitch: View {
+struct AccentSwitch: View {
     @Binding var isOn: Bool
 
     var body: some View {
@@ -386,7 +386,7 @@ private struct ExampleSnippet: View {
     }
 }
 
-private struct EmptyState: View {
+struct EmptyState: View {
     let symbol: String
     let text: String
 
@@ -496,7 +496,7 @@ struct SettingsPage: View {
 
     var body: some View {
         PageScroll {
-            PageHeader(title: "Settings", subtitle: "Keys, sounds, privacy and Command mode.")
+            PageHeader(title: "Settings", subtitle: "Keys, sounds, privacy, Command mode and meeting notes.")
 
             Section(title: "Dictation") {
                 Row(title: "Recording", detail: controller.recordingMode.hint(for: controller.shortcuts.dictate)) {
@@ -582,6 +582,8 @@ struct SettingsPage: View {
                 }
             }
 
+            MeetingSettingsSection(controller: controller, meetings: controller.meetings)
+
             Section(title: "General") {
                 Row(title: "Sounds") {
                     AccentSwitch(isOn: $controller.soundsEnabled)
@@ -606,8 +608,13 @@ struct SettingsPage: View {
                 PermissionRow(title: "Microphone", granted: Permissions.microphoneGranted) {
                     Permissions.openSettings(.microphone)
                 }
-                PermissionRow(title: "Accessibility", granted: Permissions.accessibilityGranted, divider: false) {
+                PermissionRow(title: "Accessibility", granted: Permissions.accessibilityGranted, divider: controller.meetingNotesEnabled) {
                     Permissions.openSettings(.accessibility)
+                }
+                if controller.meetingNotesEnabled {
+                    Row(title: "System audio recording", detail: "For meeting notes to hear the other people in a call. macOS asks the first time.", divider: false) {
+                        Button("Open Settings") { Permissions.openSettings(.audioCapture) }.buttonStyle(QuietButtonStyle())
+                    }
                 }
             }
 
@@ -713,7 +720,7 @@ private struct ShortcutRow: View {
 }
 
 /// A shortcut with a Change button. While recording, it shows the keys held so far.
-private struct EditableShortcutRow: View {
+struct EditableShortcutRow: View {
     let title: String
     let detail: String?
     let slot: ShortcutSlot
@@ -724,6 +731,7 @@ private struct EditableShortcutRow: View {
         case .dictate: controller.shortcuts.dictate
         case .command: controller.shortcuts.command
         case .pasteLast: controller.shortcuts.pasteLast
+        case .meeting: controller.shortcuts.meeting
         }
     }
 

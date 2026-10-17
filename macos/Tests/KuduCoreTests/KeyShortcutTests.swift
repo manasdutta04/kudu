@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import KuduCore
 
@@ -56,6 +57,31 @@ import Testing
         #expect(matcher.keyDown(9, isRepeat: false, at: 0) == ShortcutOutcome(events: [.pasteLast], swallow: true))
         _ = matcher.modifiersChanged([], at: 0.1)
         #expect(matcher.keyDown(9, isRepeat: false, at: 0.2) == ShortcutOutcome())
+    }
+
+    @Test func meetingIsAPressedShortcut() {
+        var matcher = ShortcutMatcher(shortcuts: .defaults)
+        _ = matcher.modifiersChanged([left(.control), left(.option)], at: 0)
+        #expect(matcher.keyDown(45, isRepeat: false, at: 0) == ShortcutOutcome(events: [.meeting], swallow: true))
+        var off = ShortcutSet.defaults
+        off.meeting = nil
+        var quiet = ShortcutMatcher(shortcuts: off)
+        _ = quiet.modifiersChanged([left(.control), left(.option)], at: 0)
+        #expect(quiet.keyDown(45, isRepeat: false, at: 0) == ShortcutOutcome())
+    }
+
+    @Test func savedShortcutsGetTheMeetingDefaultButKeepItOff() throws {
+        // Saved by an older version, which had no meeting shortcut.
+        var object = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(ShortcutSet.defaults)) as? [String: Any])
+        object["meeting"] = nil
+        let old = try JSONSerialization.data(withJSONObject: object)
+        let decoded = try JSONDecoder().decode(ShortcutSet.self, from: old)
+        #expect(decoded.meeting == ShortcutSet.defaultMeeting)
+        var off = ShortcutSet.defaults
+        off.meeting = nil
+        let saved = try JSONEncoder().encode(off)
+        #expect(try JSONDecoder().decode(ShortcutSet.self, from: saved).meeting == nil)
+        #expect(ShortcutSet.defaults.meeting?.displayName == "⌃⌥N")
     }
 
     @Test func aKeyShortcutHoldsAndHidesItsKey() {

@@ -2,13 +2,14 @@ import KuduKit
 import SwiftUI
 
 enum Page: String, CaseIterable, Identifiable {
-    case home, insights, dictionary, snippets, style, settings
+    case home, meetings, insights, dictionary, snippets, style, settings
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .home: "Home"
+        case .meetings: "Meetings"
         case .insights: "Insights"
         case .dictionary: "Dictionary"
         case .snippets: "Snippets"
@@ -20,6 +21,7 @@ enum Page: String, CaseIterable, Identifiable {
     var symbol: String {
         switch self {
         case .home: "house"
+        case .meetings: "person.2.wave.2"
         case .insights: "chart.bar.xaxis"
         case .dictionary: "character.book.closed"
         case .snippets: "text.badge.plus"
@@ -49,7 +51,7 @@ struct MainWindow: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            Sidebar(controller: controller, navigation: navigation)
+            Sidebar(controller: controller, meetings: controller.meetings, navigation: navigation)
                 .frame(width: 228)
             detail
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -67,6 +69,7 @@ struct MainWindow: View {
     @ViewBuilder private var detail: some View {
         switch navigation.page {
         case .home: HomeView(controller: controller, history: controller.history)
+        case .meetings: MeetingsPage(controller: controller, meetings: controller.meetings, store: controller.meetings.store)
         case .insights: InsightsPage(ledger: controller.ledger)
         case .dictionary: DictionaryPage(store: controller.store)
         case .snippets: SnippetsPage(store: controller.store)
@@ -78,6 +81,7 @@ struct MainWindow: View {
 
 private struct Sidebar: View {
     @ObservedObject var controller: DictationController
+    @ObservedObject var meetings: MeetingRecorder
     @ObservedObject var navigation: Navigation
 
     var body: some View {
@@ -92,7 +96,9 @@ private struct Sidebar: View {
             .padding(.bottom, 18)
 
             ForEach(Page.allCases) { page in
-                SidebarItem(page: page, selected: navigation.page == page) { navigation.page = page }
+                SidebarItem(page: page, selected: navigation.page == page, live: page == .meetings && meetings.isRecording) {
+                    navigation.page = page
+                }
             }
 
             Spacer()
@@ -107,6 +113,8 @@ private struct Sidebar: View {
 private struct SidebarItem: View {
     let page: Page
     let selected: Bool
+    /// A red dot: meeting notes are being taken.
+    var live = false
     let action: () -> Void
 
     var body: some View {
@@ -119,6 +127,7 @@ private struct SidebarItem: View {
                 Text(page.title)
                     .font(.system(size: 13.5, weight: selected ? .semibold : .regular))
                 Spacer(minLength: 0)
+                if live { Circle().fill(Color.red).frame(width: 7, height: 7) }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)

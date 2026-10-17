@@ -14,7 +14,9 @@ public final class DictationController: ObservableObject {
     }
 
     @Published public private(set) var modelState: ModelState = .missing
-    @Published public private(set) var isRecording = false
+    @Published public private(set) var isRecording = false {
+        didSet { meetings.setMicMuted(isRecording) }
+    }
     /// Recording continues without holding the key (double-tap to start, tap to stop).
     @Published public private(set) var isHandsFree = false
     @Published public private(set) var lastTranscript = ""
@@ -27,7 +29,7 @@ public final class DictationController: ObservableObject {
     /// Dictation, Command mode and paste-last shortcuts, changeable in Settings.
     @Published public var shortcuts: ShortcutSet {
         didSet {
-            hotkey.shortcuts = shortcuts
+            hotkey.shortcuts = activeShortcuts
             if let data = try? JSONEncoder().encode(shortcuts) { UserDefaults.standard.set(data, forKey: Keys.shortcuts) }
             updateFnGuard()
         }
@@ -94,6 +96,29 @@ public final class DictationController: ObservableObject {
         }
     }
 
+    /// Meeting notes: off until the user turns them on.
+    @Published public var meetingNotesEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(meetingNotesEnabled, forKey: Keys.meetingNotes)
+            hotkey.shortcuts = activeShortcuts
+            updateMeetingDetection()
+            if !meetingNotesEnabled, meetings.isRecording { Task { await stopMeeting() } }
+        }
+    }
+    /// What happens when a meeting app starts using the microphone.
+    @Published public var meetingAutoStart: MeetingAutoStart {
+        didSet {
+            UserDefaults.standard.set(meetingAutoStart.rawValue, forKey: Keys.meetingAutoStart)
+            updateMeetingDetection()
+        }
+    }
+    /// Record the Mac's sound too (the other people in the call), not only the microphone.
+    @Published public var meetingSystemAudio: Bool {
+        didSet { UserDefaults.standard.set(meetingSystemAudio, forKey: Keys.meetingSystemAudio) }
+    }
+    /// Meetings recorded and their notes.
+    public let meetings: MeetingRecorder
+
     private let hotkey: HotkeyMonitor
     private let recorder = AudioRecorder()
     private let engine = ParakeetEngine()
@@ -143,6 +168,9 @@ public final class DictationController: ObservableObject {
         static let learnFromCorrections = "learnFromCorrections"
         static let speechModel = "speechModel"
         static let preventEmojiPicker = "preventEmojiPicker"
+        static let meetingNotes = "meetingNotesEnabled"
+        static let meetingAutoStart = "meetingAutoStart"
+        static let meetingSystemAudio = "meetingSystemAudio"
     }
 
     public init(store: UserDataStore = UserDataStore(), history: HistoryStore = HistoryStore(), ledger: UsageLedger? = nil) {
@@ -161,10 +189,16 @@ public final class DictationController: ObservableObject {
         self.microphoneUID = defaults.string(forKey: Keys.microphone)
         self.learnFromCorrections = defaults.object(forKey: Keys.learnFromCorrections) as? Bool ?? true
         self.speechModel = defaults.string(forKey: Keys.speechModel).flatMap(SpeechModel.init(rawValue:)) ?? .base
+        self.meetingNotesEnabled = defaults.bool(forKey: Keys.meetingNotes)
+        self.meetingAutoStart = defaults.string(forKey: Keys.meetingAutoStart).flatMap(MeetingAutoStart.init(rawValue:)) ?? .off
+        self.meetingSystemAudio = defaults.object(forKey: Keys.meetingSystemAudio) as? Bool ?? true
         self.hotkey = HotkeyMonitor(shortcuts: shortcuts)
+        self.meetings = MeetingRecorder(engine: engine, dictionary: { store.dictionary })
         sounds.isEnabled = soundsEnabled
         hotkey.suppressFn = preventEmojiPicker
+        hotkey.shortcuts = activeShortcuts
         hotkey.onEvent = { [weak self] event in self?.handle(event) }
+        meetingDetection.onChange = { [weak self] change in self?.meetingChanged(change) }
         editObserver.onLearned = { [weak self] corrections in self?.remember(corrections) }
         let overlayModel = overlay.model
         recorder.onLevel = { level in
@@ -197,6 +231,11 @@ public final class DictationController: ObservableObject {
             Task { await loadModel() }
         }
         if store.cleanup.editingStrength != .verbatim { formatter.prewarm() }
+        updateMeetingDetection()
+        if !meetingsRecovered {
+            meetingsRecovered = true
+            Task { await meetings.recoverInterrupted() }
+        }
     }
 
     /// Plays the overlay through every state with a synthetic voice-like signal, so its look
@@ -224,6 +263,7 @@ public final class DictationController: ObservableObject {
 
     /// Call when the app is quitting: gives the 🌐 key its own action back.
     public func shutdown() {
+        meetingDetection.stop()
         fnGuard.disengage()
         hotkey.stop()
     }
@@ -284,7 +324,7 @@ public final class DictationController: ObservableObject {
     }
 
     private func apply(_ shortcut: KeyShortcut, to slot: ShortcutSlot) {
-        if slot != .pasteLast, !shortcut.isUsableForHolding(keyTypesText: KeyboardLayout.typesText) {
+        if slot != .pasteLast, slot != .meeting, !shortcut.isUsableForHolding(keyTypesText: KeyboardLayout.typesText) {
             shortcutError = "\(shortcut.displayName) types text, so it can't be held to talk. Add ⌃, ⌥ or ⌘, or use fn or an F-key."
             return
         }
@@ -292,11 +332,16 @@ public final class DictationController: ObservableObject {
             shortcutError = "Paste last transcript needs a key, like ⌃⌘V."
             return
         }
+        if slot == .meeting, shortcut.isModifierOnly {
+            shortcutError = "Meeting notes needs a key, like ⌃⌥N."
+            return
+        }
         var updated = shortcuts
         switch slot {
         case .dictate: updated.dictate = shortcut
         case .command: updated.command = shortcut
         case .pasteLast: updated.pasteLast = shortcut
+        case .meeting: updated.meeting = shortcut
         }
         if let problem = updated.problems.first {
             shortcutError = problem
@@ -427,6 +472,8 @@ public final class DictationController: ObservableObject {
             finishCommand()
         case .pasteLast:
             pasteLastTranscript()
+        case .meeting:
+            Task { await toggleMeeting() }
         }
     }
 
@@ -716,6 +763,100 @@ public final class DictationController: ObservableObject {
                 self.overlay.flash("Couldn't transcribe")
             }
             signposter.endInterval("dictation", interval)
+        }
+    }
+
+    // MARK: - Meeting notes
+
+    private let meetingDetection = MeetingDetection()
+    private let meetingPrompt = MeetingPromptPanel()
+    private var meetingsRecovered = false
+
+    /// The shortcuts the keyboard monitor listens for: the meeting shortcut only while
+    /// meeting notes are on, so ⌃⌥N keeps working in other apps otherwise.
+    private var activeShortcuts: ShortcutSet {
+        var active = shortcuts
+        if !meetingNotesEnabled { active.meeting = nil }
+        return active
+    }
+
+    /// Meeting detection runs only when meeting notes are on and set to react to meetings.
+    private func updateMeetingDetection() {
+        if meetingNotesEnabled && meetingAutoStart != .off {
+            meetingDetection.start()
+        } else {
+            meetingDetection.stop()
+            meetingPrompt.hide()
+        }
+    }
+
+    private func meetingChanged(_ change: MeetingDetector.Change) {
+        guard meetingNotesEnabled else { return }
+        switch change {
+        case let .started(app):
+            guard !meetings.isRecording else { return }
+            switch meetingAutoStart {
+            case .off:
+                break
+            case .ask:
+                meetingPrompt.show(app: app.name, shortcut: shortcuts.meeting?.displayName) { [weak self] in
+                    Task { await self?.startMeeting(app: app.name, fromDetection: true) }
+                }
+            case .automatic:
+                Task { await startMeeting(app: app.name, fromDetection: true) }
+            }
+        case .ended:
+            meetingPrompt.hide()
+            if meetings.isRecording, meetings.startedFromDetection {
+                Task { await stopMeeting() }
+            }
+        }
+    }
+
+    /// The meeting shortcut, the menu and the Meetings page: start, or stop if recording.
+    public func toggleMeeting() async {
+        guard meetingNotesEnabled else { return }
+        if meetings.isRecording {
+            await stopMeeting()
+        } else {
+            await startMeeting(app: meetingDetection.active?.name, fromDetection: false)
+        }
+    }
+
+    /// Why meeting notes can't start right now, if they can't.
+    public var meetingBlocker: String? {
+        if !Permissions.microphoneGranted { return "Allow the microphone first" }
+        if modelState != .ready { return "Download a speech model first" }
+        return nil
+    }
+
+    public func startMeeting(app: String? = nil, fromDetection: Bool = false) async {
+        guard meetingNotesEnabled, !meetings.isRecording else { return }
+        meetingPrompt.hide()
+        if let blocker = meetingBlocker {
+            overlay.flash(blocker, for: .seconds(3))
+            return
+        }
+        do {
+            try meetings.start(app: app, fromDetection: fromDetection, includeSystemAudio: meetingSystemAudio, microphoneUID: microphoneUID)
+            meetings.setMicMuted(isRecording)
+            sounds.playStart()
+            overlay.flash(app.map { "Taking notes · \($0)" } ?? "Taking meeting notes", for: .seconds(2))
+        } catch {
+            log.error("Couldn't start meeting notes: \(error.localizedDescription, privacy: .public)")
+            overlay.flash("Couldn't open the microphone", for: .seconds(3))
+        }
+    }
+
+    public func stopMeeting() async {
+        guard meetings.isRecording else { return }
+        sounds.playStop()
+        overlay.flash("Writing meeting notes…", for: .seconds(2))
+        let meeting = await meetings.stop()
+        if meeting != nil, meetings.systemAudioBlocked {
+            overlay.flash("Notes saved · allow System Audio Recording to hear others", for: .seconds(4))
+        } else {
+            overlay.flash(meeting == nil ? "Too short to keep" : "Meeting notes saved", for: .seconds(2))
         }
     }
 }

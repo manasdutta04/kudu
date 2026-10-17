@@ -32,7 +32,7 @@ public enum RecordingMode: String, CaseIterable, Sendable, Codable, Identifiable
 
 /// The shortcuts that can be changed in Settings.
 public enum ShortcutSlot: String, CaseIterable, Sendable, Identifiable {
-    case dictate, command, pasteLast
+    case dictate, command, pasteLast, meeting
 
     public var id: String { rawValue }
 }

@@ -18,6 +18,8 @@ public enum HotkeyEvent: Sendable {
     case commandReleased
     /// The paste-last shortcut (⌃⌘V by default): paste the last transcript again.
     case pasteLast
+    /// The meeting notes shortcut (⌃⌥N by default): start or stop taking notes.
+    case meeting
 }
 
 /// Watches the keyboard with a CGEventTap and recognizes the user's shortcuts (`ShortcutSet`,
@@ -332,6 +334,7 @@ extension HotkeyEvent {
         case .commandPressed: self = .commandPressed
         case .commandReleased: self = .commandReleased
         case .pasteLast: self = .pasteLast
+        case .meeting: self = .meeting
         }
     }
 }

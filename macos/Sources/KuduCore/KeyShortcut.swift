@@ -120,19 +120,48 @@ public struct ShortcutSet: Codable, Sendable, Equatable {
     public var command: KeyShortcut?
     /// Press to paste the last transcript again.
     public var pasteLast: KeyShortcut?
+    /// Press to start or stop taking meeting notes.
+    public var meeting: KeyShortcut?
 
-    public init(dictate: KeyShortcut, command: KeyShortcut?, pasteLast: KeyShortcut?) {
+    public init(dictate: KeyShortcut, command: KeyShortcut?, pasteLast: KeyShortcut?, meeting: KeyShortcut? = ShortcutSet.defaultMeeting) {
         self.dictate = dictate
         self.command = command
         self.pasteLast = pasteLast
+        self.meeting = meeting
     }
 
-    /// fn to dictate, fn + ⌃ for Command mode, ⌃⌘V to paste the last transcript.
+    /// ⌃⌥N: start or stop meeting notes.
+    public static let defaultMeeting = KeyShortcut([ModifierKey(.control), ModifierKey(.option)], keyCode: 45, keyLabel: "N")
+
+    /// fn to dictate, fn + ⌃ for Command mode, ⌃⌘V to paste the last transcript, ⌃⌥N for
+    /// meeting notes.
     public static let defaults = ShortcutSet(
         dictate: .fn,
         command: KeyShortcut([ModifierKey(.fn), ModifierKey(.control)]),
-        pasteLast: KeyShortcut([ModifierKey(.control), ModifierKey(.command)], keyCode: 9, keyLabel: "V")
+        pasteLast: KeyShortcut([ModifierKey(.control), ModifierKey(.command)], keyCode: 9, keyLabel: "V"),
+        meeting: defaultMeeting
     )
+
+    private enum CodingKeys: String, CodingKey { case dictate, command, pasteLast, meeting }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        dictate = try container.decode(KeyShortcut.self, forKey: .dictate)
+        command = try container.decodeIfPresent(KeyShortcut.self, forKey: .command)
+        pasteLast = try container.decodeIfPresent(KeyShortcut.self, forKey: .pasteLast)
+        // Saved before meeting notes existed: use the default. Saved as null: switched off.
+        meeting = container.contains(.meeting)
+            ? try container.decodeIfPresent(KeyShortcut.self, forKey: .meeting)
+            : Self.defaultMeeting
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(dictate, forKey: .dictate)
+        try container.encodeIfPresent(command, forKey: .command)
+        try container.encodeIfPresent(pasteLast, forKey: .pasteLast)
+        try container.encode(meeting, forKey: .meeting)
+    }
 
     /// Whether fn is part of a hold shortcut (so fn presses must be hidden from the system).
     public var usesFn: Bool { dictate.contains(.fn) || command?.contains(.fn) == true }
@@ -145,12 +174,15 @@ public struct ShortcutSet: Codable, Sendable, Equatable {
         if let pasteLast, pasteLast == dictate || pasteLast == command {
             problems.append("Paste last transcript needs its own shortcut.")
         }
+        if let meeting, meeting == dictate || meeting == command || meeting == pasteLast {
+            problems.append("Meeting notes needs its own shortcut.")
+        }
         return problems
     }
 }
 
 public enum ShortcutEvent: Sendable, Equatable {
-    case pressed, released, cancelled, commandPressed, commandReleased, pasteLast
+    case pressed, released, cancelled, commandPressed, commandReleased, pasteLast, meeting
 }
 
 /// The matcher's answer to one key event.
@@ -255,6 +287,9 @@ public struct ShortcutMatcher: Sendable {
         if active == nil, !isRepeat {
             if let paste = shortcuts.pasteLast, paste.keyCode == code, paste.modifiersMatch(held) {
                 return ShortcutOutcome(events: [.pasteLast], swallow: true)
+            }
+            if let meeting = shortcuts.meeting, meeting.keyCode == code, meeting.modifiersMatch(held) {
+                return ShortcutOutcome(events: [.meeting], swallow: true)
             }
             if let command = shortcuts.command, command.keyCode == code, command.modifiersMatch(held) {
                 var outcome = activate(.command, at: now, .commandPressed)

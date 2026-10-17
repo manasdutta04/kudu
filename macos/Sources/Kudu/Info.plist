@@ -31,7 +31,9 @@
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.productivity</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Kudu listens only while you hold the dictation key, and transcribes on this Mac.</string>
+	<string>Kudu listens only while you hold the dictation key or take meeting notes, and transcribes on this Mac.</string>
+	<key>NSAudioCaptureUsageDescription</key>
+	<string>For meeting notes, Kudu transcribes what the other people in a call say, on this Mac. The audio is never saved.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026 Manas Dutta. MIT License.</string>
 </dict>

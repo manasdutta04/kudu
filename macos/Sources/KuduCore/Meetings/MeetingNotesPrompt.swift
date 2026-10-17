@@ -22,15 +22,16 @@ public enum MeetingNotesPrompt {
         You write meeting notes from a transcript or from summaries of its parts. Lines may \
         start with who spoke: "You" is the person taking notes, "Others" is everyone else.
         Use only what is in the input. Never invent names, numbers or dates. Be brief and \
-        concrete. Write in this exact format, and write None under a heading with nothing:
-        TITLE: a short title for the meeting, at most 8 words
-        SUMMARY: two to four sentences
+        concrete. Reply in exactly this format, starting with the TITLE line, and write None \
+        under a heading with nothing:
+        TITLE: <what the meeting was about, at most 8 words>
+        SUMMARY: <two to four sentences>
         KEY POINTS:
-        - one point per line
+        - <one point per line>
         DECISIONS:
-        - one decision per line
+        - <one decision per line>
         ACTION ITEMS:
-        - who will do what, and by when if said
+        - <who will do what, and by when if said>
         """
 
     /// The transcript split into parts of about `partWords` words, at line or sentence ends.
@@ -65,10 +66,7 @@ public enum MeetingNotesPrompt {
     }
 
     public static func notesPrompt(partSummaries: [String]) -> String {
-        let joined = partSummaries.enumerated()
-            .map { "Part \($0.offset + 1):\n\($0.element)" }
-            .joined(separator: "\n\n")
-        return "Summaries of the meeting, part by part:\n\n\(joined)"
+        "Notes taken during the meeting, from start to end:\n\n" + partSummaries.joined(separator: "\n")
     }
 
     /// Reads a model's reply in the notes format. Nil if it isn't in that format.
@@ -90,6 +88,11 @@ public enum MeetingNotesPrompt {
                 if heading == .title { title = rest.isEmpty ? nil : rest }
                 else if heading == .summary { if !rest.isEmpty { summary.append(rest) } }
                 else if !rest.isEmpty, !isNone(rest) { lists[heading, default: []].append(rest) }
+                continue
+            }
+            if current == nil, title == nil, headings == 0, WordCount.count(line) <= 12 {
+                // A first line before any heading is the title, even without "TITLE:".
+                title = clean(line)
                 continue
             }
             switch current {

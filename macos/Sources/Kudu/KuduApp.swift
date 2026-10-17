@@ -14,7 +14,7 @@ struct KuduApp: App {
 
         MenuBarExtra {
             MenuContent(
-                controller: appDelegate.controller, history: appDelegate.controller.history,
+                controller: appDelegate.controller, meetings: appDelegate.controller.meetings, history: appDelegate.controller.history,
                 store: appDelegate.controller.store, navigation: appDelegate.navigation
             )
         } label: {

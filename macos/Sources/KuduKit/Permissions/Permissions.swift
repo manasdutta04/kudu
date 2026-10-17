@@ -56,5 +56,7 @@ public enum Permissions {
     public enum Pane: String {
         case microphone = "Privacy_Microphone"
         case accessibility = "Privacy_Accessibility"
+        /// "Screen & System Audio Recording": the Mac's sound, for meeting notes.
+        case audioCapture = "Privacy_AudioCapture"
     }
 }
