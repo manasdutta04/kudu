@@ -108,6 +108,14 @@ fn up   ─▶ AudioRecorder.stop ─▶ final transcription ─▶ reuse format
 - `UsageLedger` keeps text-free daily totals in `usage.json`: words, dictations, audio time, cleanups, dictionary fixes, learned words, and words per category and per app. It is backfilled from history on first run.
 - `Insights` derives speed, the 26-week heat map (levels relative to your 90th-percentile day), current and longest streak, the monthly change and time saved.
 
+### Meeting notes (`KuduKit/Meetings`, `KuduCore/Meetings`)
+1. **Capture.** `MeetingCapture` records two 16 kHz streams: the microphone, on its own `AVAudioEngine`, and the Mac's sound, through a Core Audio process tap. The tap covers every process except Kudu and is read through a private aggregate device (macOS 14.2+). If the tap can't be made, only the microphone is recorded. Gaps are filled with silence, so both streams keep wall-clock time. The microphone is muted while you dictate.
+2. **Transcribe.** `SpeechChunker` cuts each stream at pauses (4–28 s pieces). `MeetingRecorder` transcribes the pieces with the speech model already loaded and appends each segment to `Meetings/<id>/transcript.jsonl`. The audio is dropped.
+3. **Echo.** `TranscriptAssembler` holds microphone segments until the Mac's sound has been transcribed past them, then drops those that mostly repeat what the others said (speakers picked up by the microphone).
+4. **Notes.** `MeetingNotesWriter` has Apple Intelligence write the title, summary, key points, decisions and action items. Long meetings are summarised in parts of about 1,400 words first. `MeetingNotesPrompt` parses the reply and checks it isn't just the transcript. If Apple Intelligence isn't there or its reply can't be used, rule-based notes are used instead.
+5. **Detection.** `MeetingDetection` reads Core Audio's process list every 2 s. `MeetingDetector` decides start (3 s of a meeting app or browser holding the microphone) and end (20 s without). On older macOS it falls back to "the microphone is in use and a meeting app is running". Depending on the setting, Kudu does nothing, asks with `MeetingPromptPanel`, or starts by itself and stops when the meeting ends.
+6. **Storage.** `MeetingStore` keeps `meeting.json` and the transcript per meeting, uses the same format on every platform, and finishes meetings interrupted by a quit on the next launch.
+
 ### App and branding (`Kudu/`, `KuduKit/Branding`)
 - A regular Dock app with one main window: a hidden title bar, a custom sidebar and a rounded content panel. Closing it keeps Kudu listening, and the Dock icon reopens it.
 - Setup lives on the Home page (`SetupCard`), shown only while something is missing.
@@ -118,5 +126,7 @@ fn up   ─▶ AudioRecorder.stop ─▶ final transcription ─▶ reuse format
 - `kudu-bench file.wav ...` runs the real engine and pipeline and prints milliseconds per clip.
 - `kudu-bench --format file.wav` adds smart formatting; `kudu-bench --format --text "raw words"` formats text directly.
 - `kudu-bench --stream file.wav` replays a recording in real time through `StreamingSession` and reports release → text.
+- `kudu-bench --meeting a.wav b.wav …` runs clips as alternating meeting turns through the meeting path (pause cuts, transcription, notes).
+- `kudu-bench --capture-system 10` records the Mac's sound for 10 s through the meeting tap and transcribes it. It must run from an app bundle with the audio-capture usage string, or macOS returns silence.
 - `kudu-bench --command "instruction" ["selected text"]` runs Command mode.
 - In the app, each dictation is a `dictation` signpost interval: open Instruments, then **Points of Interest**.

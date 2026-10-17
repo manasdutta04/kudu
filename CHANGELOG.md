@@ -3,6 +3,28 @@
 All notable changes to Kudu are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com) and the project uses [Semantic Versioning](https://semver.org).
 
+## [0.1.5] - Unreleased
+### Added
+- **Meeting notes, on your computer.**
+  - Turn them on in the new **Meetings** page. Kudu then transcribes your calls (Zoom, Teams,
+    Meet in a browser, Webex, Slack, FaceTime…) and writes the title, summary, key points,
+    decisions and action items when the call ends.
+  - It hears you through the microphone and the other people through what your computer plays,
+    as "You" and "Others", and drops what the microphone picks up from the speakers.
+  - Start or stop with **⌃⌥N** on a Mac or **Ctrl + Alt + N** on Windows and Linux (changeable),
+    the menu bar or tray, or the Start button. Or set "When a meeting starts" to *Ask me*
+    (*Remind me* on Windows and Linux) or *Start taking notes*: Kudu notices a meeting app
+    using the microphone, and stops by itself when the meeting ends.
+  - Notes are written by Apple Intelligence on a Mac and by the Kudu writer on Windows and
+    Linux. Without them, Kudu picks action items and decisions from the transcript itself.
+  - The audio is never saved. Transcripts and notes stay on your computer until you delete
+    them; copy them or export Markdown from the Meetings page.
+  - Fallbacks: the microphone alone when the computer's sound can't be recorded (with a hint
+    when the Mac is blocking it), the shortcut when meetings can't be detected, and recovery of
+    a meeting interrupted by a quit.
+- **A designed install window on the Mac:** the disk image opens to a laid-out window with an
+  arrow from Kudu to Applications and the one-line fix for "Kudu can't be opened".
+
 ## [0.1.4] - 2026-10-17
 ### Added
 - **Updates from inside Kudu.**

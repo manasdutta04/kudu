@@ -72,6 +72,17 @@ It asks for `sudo` once to let Kudu read the keyboard and type; log out and back
 - **Insights:** words per minute, words cleaned up, time saved, a streak heat map and where
   you dictate.
 - **Snippets:** say "my email" and get your address. Supports `{date}`, `{time}` and `{clipboard}`.
+- **Meeting notes (off until you turn them on):**
+  - Kudu transcribes your calls in Zoom, Teams, Meet or any other app, on your computer, and
+    writes up the title, summary, decisions and action items when the call ends.
+  - It hears you through the microphone and the other people through what your computer plays,
+    labelling them "You" and "Others"; it never saves the audio.
+  - Start and stop with ⌃⌥N (Ctrl + Alt + N on Windows and Linux), the menu bar or tray, or let
+    Kudu ask or start by itself when a meeting app starts using the microphone.
+  - Notes are written by Apple Intelligence on a Mac and by the Kudu writer on Windows and
+    Linux. Without them, Kudu picks the action items and decisions from the transcript itself.
+  - Meetings are kept on the Meetings page until you delete them; copy or export them as
+    Markdown.
 - **History** saved only on your Mac, searchable by day, with the raw transcript.
 - A small frosted-glass pill with a live waveform; sounds; open at login.
 

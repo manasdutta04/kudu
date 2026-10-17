@@ -29,6 +29,18 @@ Kudu is built so that what you say stays on your Mac.
   show their text to Accessibility when asked, so Kudu turns that on for them when they become
   active. It's the same switch screen readers use; nothing is read until you dictate.
 - **Settings, dictionary and snippets** are saved as JSON files in the same folder.
+- **Meeting notes** are off until you turn them on. While notes are being taken:
+  - Kudu records your microphone and, if you allow it, what your Mac plays (the other people in
+    the call). macOS asks you once to allow *System Audio Recording*.
+  - The audio is transcribed on your Mac piece by piece and then discarded; it is never written
+    to disk.
+  - The transcript and the notes are saved in `~/Library/Application Support/Kudu/Meetings`, one
+    folder per meeting, until you delete them on the Meetings page.
+  - The menu-bar icon shows a dot and the Meetings page shows the live meeting the whole time.
+  - Detecting a meeting only reads which apps have the microphone open; nothing is recorded
+    until notes start.
+  - Let the people in your call know you're taking notes: in some places everyone must agree
+    to a call being recorded or transcribed.
 
 ## Network access
 Kudu connects to the internet for two things:
@@ -48,6 +60,10 @@ The same rules apply to Kudu for Windows and Linux: audio, transcripts and histo
 PC. Files live in `%APPDATA%\Kudu` and `%LOCALAPPDATA%\Kudu` on Windows, and in
 `~/.config/kudu` and `~/.local/share/kudu` on Linux.
 - The network is used only to download the model pack you choose (speech + writer).
+- Meeting notes work the same way as on the Mac. The other people are heard through WASAPI
+  loopback on Windows and the PulseAudio/PipeWire monitor on Linux. Meetings are noticed from
+  Windows' own record of which apps use the microphone, or from `pactl` on Linux. Meetings are
+  saved in Kudu's data folder under `meetings`.
 - On Windows, dictated text is pasted through the clipboard with markers that keep it out of
   clipboard history and cloud sync, and your previous clipboard is put back.
 - On Linux, Kudu reads key presses from `/dev/input` only to notice its shortcuts; keys are
@@ -58,8 +74,9 @@ PC. Files live in `%APPDATA%\Kudu` and `%LOCALAPPDATA%\Kudu` on Windows, and in
 ## Permissions
 | Permission | Why |
 |---|---|
-| Microphone | To hear you while you dictate |
+| Microphone | To hear you while you dictate, and in meetings when notes are on |
 | Accessibility | To notice the dictation key and to type text into other apps |
+| System Audio Recording | Only for meeting notes: to hear the other people in a call |
 
 ## The 🌐 / fn key
 When fn is the dictation key, Kudu sets **System Settings → Keyboard → "Press 🌐 key to"** to
@@ -68,5 +85,6 @@ saved first and put back the moment Kudu quits (or the next time it starts, if i
 You can turn this off in Kudu's menu.
 
 ## Microphone
-The microphone is open only while you are dictating: it turns on when you press the dictation
-key and off the moment you stop. macOS's orange microphone indicator is never on otherwise.
+The microphone is open only while you are dictating or taking meeting notes: it turns on when
+you press the dictation key and off the moment you stop, and for meeting notes from Start to
+Stop. macOS's orange microphone indicator is never on otherwise.

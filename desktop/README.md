@@ -33,6 +33,7 @@ use, in Settings → Models.
 | Dictate | Hold **Ctrl + Win** (Linux: Ctrl + Super) | Double-tap for hands-free |
 | Command mode | Hold **Ctrl + Win + Alt** | Select text, say "make this more formal" |
 | Paste last transcript | **Ctrl + Alt + V** | |
+| Meeting notes | **Ctrl + Alt + N** | Start or stop; only while meeting notes are on |
 | Cancel | **Esc** while dictating | |
 
 Change them in Settings → Shortcuts: click Change and press the keys you want.
