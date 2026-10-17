@@ -28,8 +28,7 @@ jobs:
       - name: Package
         run: |
           ditto -c -k --sequesterRsrc --keepParent build/Kudu.app ../Kudu-macOS.zip
-          mkdir -p dmg && cp -R build/Kudu.app dmg/ && ln -s /Applications dmg/Applications
-          hdiutil create -volname Kudu -srcfolder dmg -ov -format UDZO ../Kudu-macOS.dmg
+          scripts/make-dmg.sh build/Kudu.app ../Kudu-macOS.dmg
           cp packaging/install.sh ../install-macos.sh
           ls -la ../Kudu-macOS.*
       - uses: actions/upload-artifact@v4
