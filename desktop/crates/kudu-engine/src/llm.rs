@@ -20,6 +20,13 @@ fn backend() -> Result<&'static LlamaBackend> {
     if let Some(backend) = BACKEND.get() {
         return Ok(backend);
     }
+    // llama.cpp can be initialised only once per process: two models loading at the same time
+    // must not both try.
+    static INIT: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _guard = INIT.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some(backend) = BACKEND.get() {
+        return Ok(backend);
+    }
     let mut backend = LlamaBackend::init().map_err(|e| anyhow!("llama.cpp: {e}"))?;
     backend.void_logs();
     Ok(BACKEND.get_or_init(|| backend))
