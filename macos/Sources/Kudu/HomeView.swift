@@ -19,6 +19,8 @@ struct HomeView: View {
                     .font(Theme.display(32))
                     .padding(.top, 8)
 
+                UpdateBanner(updates: controller.updates)
+
                 SetupCard(controller: controller)
 
                 HStack(alignment: .top, spacing: 16) {
@@ -187,7 +189,7 @@ private struct StatsCard: View {
 }
 
 @MainActor
-private final class HoverState: ObservableObject {
+final class HoverState: ObservableObject {
     @Published var isHovering = false
 }
 

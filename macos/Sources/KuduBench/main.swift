@@ -98,10 +98,10 @@ if textMode {
     exit(0)
 }
 
-if !ParakeetEngine.isDownloaded {
+if !SpeechModel.base.isDownloaded {
     print("Downloading Parakeet model…")
     let lastPercent = OSAllocatedUnfairLock(initialState: -1)
-    try await ParakeetEngine.download { fraction in
+    try await SpeechModel.base.download { fraction in
         let percent = Int(fraction * 100)
         let changed = lastPercent.withLock { last in
             defer { last = max(last, percent) }
@@ -117,7 +117,7 @@ if !ParakeetEngine.isDownloaded {
 
 let engine = ParakeetEngine()
 let loadStart = ContinuousClock.now
-try await engine.load()
+try await engine.load(.base)
 print("Model loaded + warmed in \(ContinuousClock.now - loadStart)")
 
 /// Plays samples back at real-time speed, as a microphone would deliver them.

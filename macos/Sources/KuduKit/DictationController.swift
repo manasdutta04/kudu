@@ -79,6 +79,14 @@ public final class DictationController: ObservableObject {
         }
     }
 
+    /// Looks for newer releases of Kudu (daily, can be switched off) and installs them.
+    public let updates = UpdateChecker()
+
+    /// The speech model to use (Kudu Tiny or Kudu Base). Changing it downloads or loads it.
+    @Published public private(set) var speechModel: SpeechModel {
+        didSet { UserDefaults.standard.set(speechModel.rawValue, forKey: Keys.speechModel) }
+    }
+
     @Published public var soundsEnabled: Bool {
         didSet {
             sounds.isEnabled = soundsEnabled
@@ -133,6 +141,7 @@ public final class DictationController: ObservableObject {
         static let recordingMode = "recordingMode"
         static let microphone = "microphoneUID"
         static let learnFromCorrections = "learnFromCorrections"
+        static let speechModel = "speechModel"
         static let preventEmojiPicker = "preventEmojiPicker"
     }
 
@@ -151,6 +160,7 @@ public final class DictationController: ObservableObject {
         self.soundsEnabled = defaults.object(forKey: Keys.soundsEnabled) as? Bool ?? true
         self.microphoneUID = defaults.string(forKey: Keys.microphone)
         self.learnFromCorrections = defaults.object(forKey: Keys.learnFromCorrections) as? Bool ?? true
+        self.speechModel = defaults.string(forKey: Keys.speechModel).flatMap(SpeechModel.init(rawValue:)) ?? .base
         self.hotkey = HotkeyMonitor(shortcuts: shortcuts)
         sounds.isEnabled = soundsEnabled
         hotkey.suppressFn = preventEmojiPicker
@@ -173,6 +183,7 @@ public final class DictationController: ObservableObject {
     /// Call once at launch, and again after permissions change.
     public func activate() {
         AppAccessibility.start()
+        updates.start()
         if Permissions.microphoneGranted {
             if microphoneUID != nil {
                 recorder.setInputDevice(uid: microphoneUID)
@@ -182,7 +193,7 @@ public final class DictationController: ObservableObject {
         }
         hotkeyActive = Permissions.accessibilityGranted && hotkey.start()
         updateFnGuard()
-        if case .missing = modelState, ParakeetEngine.isDownloaded {
+        if case .missing = modelState, speechModel.isDownloaded {
             Task { await loadModel() }
         }
         if store.cleanup.editingStrength != .verbatim { formatter.prewarm() }
@@ -296,11 +307,31 @@ public final class DictationController: ObservableObject {
 
     // MARK: - Model
 
+    /// Switches to `model`: loads it if it's on disk, otherwise downloads it first.
+    public func chooseModel(_ model: SpeechModel) async {
+        if case .downloading = modelState { return }
+        speechModel = model
+        if model.isDownloaded {
+            await loadModel()
+        } else {
+            await downloadModel()
+        }
+    }
+
+    /// Deletes downloaded speech models other than the one in use.
+    public func removeUnusedModels() {
+        for model in SpeechModel.allCases where model != speechModel {
+            do { try model.remove() } catch { log.error("Couldn't remove \(model.rawValue): \(error.localizedDescription)") }
+        }
+        objectWillChange.send()
+    }
+
     public func downloadModel() async {
         if case .downloading = modelState { return }
         modelState = .downloading(0)
+        let model = speechModel
         do {
-            try await ParakeetEngine.download { [weak self] fraction in
+            try await model.download { [weak self] fraction in
                 Task { @MainActor in
                     guard let self, case .downloading = self.modelState else { return }
                     self.modelState = .downloading(fraction)
@@ -316,7 +347,7 @@ public final class DictationController: ObservableObject {
     private func loadModel() async {
         modelState = .loading
         do {
-            try await engine.load()
+            try await engine.load(speechModel)
             modelState = .ready
         } catch {
             log.error("Model load failed: \(error.localizedDescription)")
