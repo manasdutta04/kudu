@@ -3,7 +3,7 @@
 All notable changes to Kudu are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com) and the project uses [Semantic Versioning](https://semver.org).
 
-## [0.1.5] - Unreleased
+## [0.1.4] - 2026-10-17
 ### Added
 - **Meeting notes, on your computer.**
   - Turn them on in the new **Meetings** page. Kudu then transcribes your calls (Zoom, Teams,
@@ -24,9 +24,6 @@ All notable changes to Kudu are listed here. The format follows
     a meeting interrupted by a quit.
 - **A designed install window on the Mac:** the disk image opens to a laid-out window with an
   arrow from Kudu to Applications and the one-line fix for "Kudu can't be opened".
-
-## [0.1.4] - 2026-10-17
-### Added
 - **Updates from inside Kudu.**
   - Once a day Kudu checks GitHub for a newer version. When there is one, Home shows "Kudu
     0.1.x is available. You're on an older version" with an **Install update** button.

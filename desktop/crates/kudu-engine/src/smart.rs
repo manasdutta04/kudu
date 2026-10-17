@@ -197,19 +197,30 @@ mod tests {
         assert!(PROSE_INSTRUCTIONS_SHORT.len() * 4 < PROSE_INSTRUCTIONS.len());
     }
 
+    /// kudu-writer-tiny, downloaded once (checksum verified) for the tests that need it. The
+    /// tests run in parallel, so the download is guarded: two of them writing the same file at
+    /// once would trip over each other.
+    fn test_writer() -> SmartFormatter {
+        use crate::models::{install_writer, WriterModel};
+        static DOWNLOAD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let dir = std::env::temp_dir().join("kudu-writer-test");
+        let model = WriterModel::Tiny;
+        {
+            let _guard = DOWNLOAD.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            if !model.is_installed(&dir) {
+                install_writer(model, &dir, &mut |_| {}, &|| false).expect("download");
+            }
+        }
+        SmartFormatter::load(&model.path(&dir), model.short_prompt()).expect("load")
+    }
+
     /// Downloads kudu-writer-tiny (checksum verified), formats a spoken list with the short
     /// prompt, and checks that the guard keeps the result. Needs the network and ~230 MB, so it
     /// runs in CI (`--include-ignored`) only.
     #[test]
     #[ignore = "downloads a writer model"]
     fn kudu_writer_formats_a_spoken_list() {
-        use crate::models::{install_writer, WriterModel};
-        let dir = std::env::temp_dir().join("kudu-writer-test");
-        let model = WriterModel::Tiny;
-        if !model.is_installed(&dir) {
-            install_writer(model, &dir, &mut |_| {}, &|| false).expect("download");
-        }
-        let formatter = SmartFormatter::load(&model.path(&dir), model.short_prompt()).expect("load");
+        let formatter = test_writer();
         let request = FormatRequest {
             text: "quick update three things first design is done second backend is waiting on auth third we ship on monday"
                 .into(),
@@ -231,14 +242,8 @@ mod tests {
     #[test]
     #[ignore = "downloads a writer model"]
     fn kudu_writer_writes_meeting_notes() {
-        use crate::models::{install_writer, WriterModel};
         use kudu_core::meeting_notes;
-        let dir = std::env::temp_dir().join("kudu-writer-test");
-        let model = WriterModel::Tiny;
-        if !model.is_installed(&dir) {
-            install_writer(model, &dir, &mut |_| {}, &|| false).expect("download");
-        }
-        let formatter = SmartFormatter::load(&model.path(&dir), model.short_prompt()).expect("load");
+        let formatter = test_writer();
         let transcript = "Others: Hi everyone, thanks for joining. Today we need to settle the launch date for the new billing page. The review found two blocking bugs in the checkout flow.\n\
 You: Thanks. I looked at both bugs this morning. The login timeout one is easy, I'll fix it by Friday. The tax rounding bug needs help from the payments team.\n\
 Others: Okay. Then let's move the launch to next Tuesday instead of Thursday. Can you also send the updated deck to Sakshi before the call with finance?\n\
