@@ -48,6 +48,8 @@ pub struct Controller {
     pub matcher: Arc<Mutex<Matcher>>,
     pub speech: ModelStatus,
     pub smart: ModelStatus,
+    /// Whether a newer Kudu is out (see `daemon::Updates`).
+    pub update: crate::ipc::UpdateState,
     pub hotkeys_active: bool,
     jobs: Sender<Job>,
     learned: Sender<Vec<LearnedCorrection>>,
@@ -84,6 +86,7 @@ impl Controller {
             matcher,
             speech: ModelStatus::Missing,
             smart: ModelStatus::Missing,
+            update: crate::ipc::UpdateState::Idle,
             hotkeys_active: false,
             jobs,
             learned,
@@ -617,6 +620,7 @@ impl Controller {
                 .map(|i| crate::ipc::Issue { title: i.title, detail: i.detail, command: i.command })
                 .collect(),
             platform: if cfg!(windows) { "windows".into() } else { "linux".into() },
+            update: self.update.clone(),
         }
     }
 }

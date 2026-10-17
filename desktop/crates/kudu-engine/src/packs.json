@@ -7,7 +7,7 @@
       "writer": "kudu-writer-tiny"
     },
     {
-      "id": "kudu-basic",
+      "id": "kudu-base",
       "speech": "kudu-speech-base",
       "writer": "kudu-writer-tiny",
       "default": true

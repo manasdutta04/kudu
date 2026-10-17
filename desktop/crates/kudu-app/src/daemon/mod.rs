@@ -16,7 +16,7 @@ use std::time::Duration;
 use anyhow::Result;
 use crossbeam_channel::{select, tick, unbounded};
 
-use crate::ipc::{self, ModelStatus, Request};
+use crate::ipc::{self, ModelStatus, Request, UpdateState};
 use crate::paths::Paths;
 use crate::platform::{self, PlatformEvent, TrayAction};
 use controller::Controller;
@@ -96,6 +96,7 @@ pub fn run(args: &[String], paths: Paths) -> Result<()> {
         window.open(&controller.status());
     }
 
+    let updates = Updates::new();
     let ticker = tick(Duration::from_millis(250));
     let mut ticks: u64 = 0;
     loop {
@@ -121,15 +122,22 @@ pub fn run(args: &[String], paths: Paths) -> Result<()> {
             }
             recv(window.requests()) -> request => match request {
                 Ok(Request::Quit) => break,
-                Ok(request) => handle_request(&mut controller, &downloads, &jobs, request),
+                Ok(request) => handle_request(&mut controller, &downloads, &updates, &jobs, request),
                 Err(_) => {}
             },
             recv(downloads.events()) -> event => if let Ok(event) = event {
                 downloads.apply(event, &mut controller, &jobs);
             },
+            recv(updates.events()) -> event => if let Ok(event) = event {
+                updates.apply(event, &mut controller);
+            },
             recv(ticker) -> _ => {
                 ticks += 1;
                 controller.tick();
+                // The daily update check (first one a few seconds after starting).
+                if ticks >= 20 && controller.store.settings.check_updates && updates.due() {
+                    updates.check(&mut controller);
+                }
                 // The window may have changed settings without telling us (or crashed).
                 if ticks.is_multiple_of(4) && !controller.is_recording() && controller.store.reload_if_changed() {
                     controller.settings_reloaded();
@@ -143,7 +151,13 @@ pub fn run(args: &[String], paths: Paths) -> Result<()> {
     Ok(())
 }
 
-fn handle_request(controller: &mut Controller, downloads: &Downloads, jobs: &crossbeam_channel::Sender<Job>, request: Request) {
+fn handle_request(
+    controller: &mut Controller,
+    downloads: &Downloads,
+    updates: &Updates,
+    jobs: &crossbeam_channel::Sender<Job>,
+    request: Request,
+) {
     match request {
         Request::Reload => {
             controller.store.reload();
@@ -189,6 +203,8 @@ fn handle_request(controller: &mut Controller, downloads: &Downloads, jobs: &cro
             controller.send_status();
         }
         Request::CancelDownload => downloads.cancel(),
+        Request::CheckForUpdates => updates.check(controller),
+        Request::InstallUpdate => updates.install(controller),
         Request::RemoveUnusedModels => {
             let pack = controller.store.settings.pack();
             if let Err(error) = kudu_engine::models::remove_unused(pack, &controller.store.paths.models) {
@@ -204,6 +220,93 @@ fn handle_request(controller: &mut Controller, downloads: &Downloads, jobs: &cro
         }
         Request::PasteLast => controller.paste_last(),
         Request::Quit => {}
+    }
+}
+
+/// Checks GitHub once a day for a newer Kudu, and installs it when asked. Sends nothing but
+/// the request for the latest release's address.
+struct Updates {
+    events: (crossbeam_channel::Sender<UpdateEvent>, crossbeam_channel::Receiver<UpdateEvent>),
+    last_check: std::cell::Cell<Option<std::time::Instant>>,
+}
+
+enum UpdateEvent {
+    Checked(Result<String, String>),
+    InstallStarted(Result<(), String>),
+}
+
+impl Updates {
+    const INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
+    const RELEASES: &'static str = "https://github.com/manasdutta04/kudu/releases/latest";
+
+    fn new() -> Self {
+        Self { events: unbounded(), last_check: std::cell::Cell::new(None) }
+    }
+
+    fn events(&self) -> &crossbeam_channel::Receiver<UpdateEvent> {
+        &self.events.1
+    }
+
+    fn due(&self) -> bool {
+        self.last_check.get().is_none_or(|last| last.elapsed() >= Self::INTERVAL)
+    }
+
+    fn check(&self, controller: &mut Controller) {
+        if matches!(controller.update, UpdateState::Checking | UpdateState::Installing) {
+            return;
+        }
+        self.last_check.set(Some(std::time::Instant::now()));
+        controller.update = UpdateState::Checking;
+        controller.send_status();
+        let tx = self.events.0.clone();
+        std::thread::spawn(move || {
+            let result = guarded(|| kudu_engine::models::latest_release().map_err(|e| format!("{e:#}")));
+            let _ = tx.send(UpdateEvent::Checked(result));
+        });
+    }
+
+    /// Windows: downloads the new installer and runs it (it closes Kudu, updates it and offers
+    /// to start it again). Linux: opens the download page, as the right package depends on how
+    /// Kudu was installed.
+    fn install(&self, controller: &mut Controller) {
+        if !matches!(controller.update, UpdateState::Available { .. }) {
+            return;
+        }
+        if cfg!(windows) {
+            controller.update = UpdateState::Installing;
+            controller.send_status();
+            let tx = self.events.0.clone();
+            std::thread::spawn(move || {
+                let result = guarded(|| {
+                    let name = "Kudu-Windows-x64-Setup.exe";
+                    let dest = std::env::temp_dir().join(name);
+                    let url = kudu_engine::models::latest_release_file(name);
+                    kudu_engine::models::download_file(&url, &dest, None, &mut |_| {}, &|| false)
+                        .map_err(|e| format!("{e:#}"))?;
+                    std::process::Command::new(&dest).spawn().map_err(|e| format!("Couldn't start the installer: {e}"))?;
+                    Ok(())
+                });
+                let _ = tx.send(UpdateEvent::InstallStarted(result));
+            });
+        } else if let Err(error) = std::process::Command::new("xdg-open").arg(Self::RELEASES).spawn() {
+            log::error!("Couldn't open the download page: {error}");
+        }
+    }
+
+    fn apply(&self, event: UpdateEvent, controller: &mut Controller) {
+        controller.update = match event {
+            UpdateEvent::Checked(Ok(latest)) if kudu_core::release_version::is_newer(&latest, env!("CARGO_PKG_VERSION")) => {
+                UpdateState::Available { version: latest }
+            }
+            UpdateEvent::Checked(Ok(_)) => UpdateState::UpToDate,
+            UpdateEvent::Checked(Err(message)) => {
+                log::info!("Update check failed: {message}");
+                UpdateState::Failed { message: "Couldn't reach GitHub".into() }
+            }
+            UpdateEvent::InstallStarted(Ok(())) => UpdateState::Installing,
+            UpdateEvent::InstallStarted(Err(message)) => UpdateState::Failed { message },
+        };
+        controller.send_status();
     }
 }
 

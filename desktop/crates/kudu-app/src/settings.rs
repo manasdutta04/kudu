@@ -92,6 +92,8 @@ pub struct Settings {
     pub retention: Retention,
     /// Setup was finished once (the window stops showing the welcome card).
     pub onboarded: bool,
+    /// Check once a day whether a newer Kudu has been released.
+    pub check_updates: bool,
 }
 
 impl Default for Settings {
@@ -108,13 +110,14 @@ impl Default for Settings {
             screen_context: true,
             retention: Retention::default(),
             onboarded: false,
+            check_updates: true,
         }
     }
 }
 
 impl Settings {
     /// The chosen pack. Settings from before packs map to the closest one: the compact speech
-    /// model → kudu-tiny, the larger language model → kudu-large, anything else → kudu-basic.
+    /// model → kudu-tiny, the larger language model → kudu-large, anything else → kudu-base.
     pub fn pack(&self) -> Pack {
         self.pack.unwrap_or(match (self.legacy_speech.as_deref(), self.legacy_smart.as_deref()) {
             (Some("moonshine-base"), _) => Pack::Tiny,
@@ -140,7 +143,7 @@ mod tests {
     fn reads_older_or_partial_files() {
         let settings: Settings = serde_json::from_str(r#"{"sounds": false}"#).unwrap();
         assert!(!settings.sounds);
-        assert_eq!(settings.pack(), Pack::Basic);
+        assert_eq!(settings.pack(), Pack::Base);
         assert_eq!(settings.speech(), SpeechModel::Parakeet);
         let round_trip: Settings = serde_json::from_str(&serde_json::to_string(&settings).unwrap()).unwrap();
         assert_eq!(round_trip, settings);
@@ -151,8 +154,8 @@ mod tests {
         let pack = |json: &str| serde_json::from_str::<Settings>(json).unwrap().pack();
         assert_eq!(pack(r#"{"speechModel": "moonshine-base", "smartModel": "small"}"#), Pack::Tiny);
         assert_eq!(pack(r#"{"speechModel": "parakeet", "smartModel": "better"}"#), Pack::Large);
-        assert_eq!(pack(r#"{"speechModel": "parakeet", "smartModel": "small"}"#), Pack::Basic);
-        assert_eq!(pack(r#"{"speechModel": "parakeet", "smartModel": null}"#), Pack::Basic);
+        assert_eq!(pack(r#"{"speechModel": "parakeet", "smartModel": "small"}"#), Pack::Base);
+        assert_eq!(pack(r#"{"speechModel": "parakeet", "smartModel": null}"#), Pack::Base);
         assert_eq!(pack(r#"{"pack": "kudu-large", "speechModel": "moonshine-base"}"#), Pack::Large);
     }
 

@@ -37,6 +37,10 @@ pub enum Request {
     CancelDownload,
     /// Delete downloaded models the chosen pack doesn't use.
     RemoveUnusedModels,
+    /// Ask GitHub now whether a newer Kudu is out.
+    CheckForUpdates,
+    /// Install the newer version (Windows: run its installer; Linux: open the download page).
+    InstallUpdate,
     SetLaunchAtLogin { enabled: bool },
     PasteLast,
     Quit,
@@ -56,6 +60,23 @@ pub struct Status {
     /// Problems the user must fix (permissions, missing packages).
     pub issues: Vec<Issue>,
     pub platform: String,
+    /// Whether a newer Kudu is out.
+    #[serde(default)]
+    pub update: UpdateState,
+}
+
+/// The update check's result, for the window.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "camelCase")]
+pub enum UpdateState {
+    #[default]
+    Idle,
+    Checking,
+    UpToDate,
+    Available { version: String },
+    /// The installer is downloading or running; Kudu will be closed and updated.
+    Installing,
+    Failed { message: String },
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

@@ -3,7 +3,7 @@
 use eframe::egui::{self, vec2, Color32, Frame, Id, Margin, Modal, Sense, Stroke, StrokeKind, Ui, Vec2};
 use kudu_engine::Pack;
 
-use crate::ipc::{ModelStatus, Request, ShortcutSlot};
+use crate::ipc::{ModelStatus, Request, ShortcutSlot, UpdateState};
 use crate::settings::{RecordingMode, Retention};
 use crate::window::data::{default_shortcuts, grouped};
 use crate::window::icons::{self, Icon};
@@ -13,6 +13,7 @@ use crate::window::pages::home::gigabytes;
 use crate::window::{App, WRITER};
 
 const REPOSITORY: &str = "https://github.com/manasdutta04/kudu";
+const CREDITS: &str = "https://github.com/manasdutta04/kudu#credits";
 
 pub fn show(app: &mut App, ui: &mut Ui) {
     widgets::page_header(ui, "Settings", "Keys, sounds, models and privacy.");
@@ -371,12 +372,12 @@ fn models(app: &mut App, ui: &mut Ui) {
             for pack in Pack::ALL {
                 let selected = pack == current;
                 let size = format!("{} download · {} on disk", gigabytes(pack.download_bytes()), gigabytes(u64::from(pack.disk_mb()) * 1_000_000));
-                let summary = format!("{} {} + {}.", pack.summary(), pack.speech().id(), pack.writer().id());
+                let summary = format!("{} Speech recognition and the writer.", pack.summary());
                 let failure = match (&state, selected) {
                     (Some(ModelStatus::Failed { message }), true) => Some(message.as_str()),
                     _ => None,
                 };
-                let info = ModelInfo { title: pack.id(), size: &size, summary: &summary, selected, failure };
+                let info = ModelInfo { title: pack.name(), size: &size, summary: &summary, selected, failure };
                 let on_disk = installed(pack);
                 model_row(ui, info, true, |ui| {
                     if let Some(action) = model_control(ui, state.as_ref(), selected, on_disk, false) {
@@ -384,14 +385,7 @@ fn models(app: &mut App, ui: &mut Ui) {
                     }
                 });
             }
-            let credits = format!(
-                "{}: {}. {}: {}.",
-                current.speech().id(),
-                current.speech().credit(),
-                current.writer().id(),
-                current.writer().credit()
-            );
-            widgets::row(ui, "What's inside", Some(&credits), true, |ui| {
+            widgets::row(ui, "Unused models", Some("Packs you switched away from stay on disk until you remove them."), true, |ui| {
                 if widgets::button_enabled(ui, "Remove unused models", ButtonKind::Quiet, unused).clicked() {
                     app.send(Request::RemoveUnusedModels);
                 }
@@ -484,7 +478,52 @@ fn about(app: &mut App, ui: &mut Ui) {
             ui.label(text(env!("CARGO_PKG_VERSION"), 13.0, Weight::Regular, pal.secondary));
         });
         widgets::row(ui, "Models", None, true, |ui| {
-            ui.label(text(format!("{}, on this computer", pack.id()), 13.0, Weight::Regular, pal.secondary));
+            ui.label(text(format!("{}, on this computer", pack.name()), 13.0, Weight::Regular, pal.secondary));
+        });
+        let mut automatic = app.data.settings.check_updates;
+        widgets::row(
+            ui,
+            "Check for updates automatically",
+            Some("Once a day, Kudu asks GitHub which version is the latest. Nothing about you is sent."),
+            true,
+            |ui| {
+                widgets::switch(ui, &mut automatic);
+            },
+        );
+        if automatic != app.data.settings.check_updates {
+            app.data.update_settings(|s| s.check_updates = automatic);
+            app.send(Request::Reload);
+        }
+        let version = env!("CARGO_PKG_VERSION");
+        let update = app.status.as_ref().map(|s| s.update.clone()).unwrap_or_default();
+        let detail = match &update {
+            UpdateState::Idle => format!("You're on {version}."),
+            UpdateState::Checking => "Checking…".to_string(),
+            UpdateState::UpToDate => format!("You're on {version}, the latest version."),
+            UpdateState::Available { version: latest } => format!("Kudu {latest} is available. You're on {version}, an older version."),
+            UpdateState::Installing => "Installing… Kudu will close while it updates.".to_string(),
+            UpdateState::Failed { message } => format!("{message}. You're on {version}."),
+        };
+        widgets::row(ui, "Updates", Some(&detail), true, |ui| match &update {
+            UpdateState::Available { .. } => {
+                let label = if cfg!(windows) { "Install update" } else { "Download update" };
+                if button(ui, label, ButtonKind::Prominent).clicked() {
+                    app.send(Request::InstallUpdate);
+                }
+            }
+            UpdateState::Checking | UpdateState::Installing => {
+                ui.label(text("…", 13.0, Weight::Regular, pal.secondary));
+            }
+            _ => {
+                if button(ui, "Check now", ButtonKind::Quiet).clicked() {
+                    app.send(Request::CheckForUpdates);
+                }
+            }
+        });
+        widgets::row(ui, "Open-source credits", Some("The open models and libraries Kudu is built on, and their licenses."), true, |ui| {
+            if link(ui, "View").clicked() {
+                open_url(CREDITS);
+            }
         });
         widgets::row(ui, "Everything stays on this computer.", Some("Kudu is open source under the MIT license."), false, |ui| {
             let response = link(ui, "github.com/manasdutta04/kudu");

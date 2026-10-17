@@ -10,7 +10,7 @@ use eframe::egui::{
 use kudu_core::Day;
 use kudu_engine::Pack;
 
-use crate::ipc::{ModelStatus, Request};
+use crate::ipc::{ModelStatus, Request, UpdateState};
 use crate::settings::RecordingMode;
 use crate::window::data::{compact, day_title, time_of_day};
 use crate::window::icons::{self, Icon};
@@ -47,6 +47,10 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     ui.label(RichText::new(format!("Welcome back, {}", app.first_name)).font(display(32.0)).color(pal.text));
     ui.add_space(26.0);
 
+    if update_banner(app, ui) {
+        ui.add_space(20.0);
+    }
+
     if app.status.is_some() && !app.setup_complete() {
         setup_card(app, ui);
         ui.add_space(26.0);
@@ -55,6 +59,50 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     hero_and_stats(app, ui);
     ui.add_space(26.0);
     history(app, ui);
+}
+
+// MARK: - Update
+
+/// "Kudu 0.1.4 is available" with an Install button, when a newer version is out. Returns
+/// whether it showed.
+fn update_banner(app: &mut App, ui: &mut Ui) -> bool {
+    let pal = Palette::of(ui);
+    let Some(status) = app.status.clone() else { return false };
+    let (title, detail) = match &status.update {
+        UpdateState::Available { version } => (
+            format!("Kudu {version} is available"),
+            if cfg!(windows) {
+                format!("You're on {}, an older version. The installer closes Kudu, updates it and starts it again.", env!("CARGO_PKG_VERSION"))
+            } else {
+                format!("You're on {}, an older version. Download the new package for your system.", env!("CARGO_PKG_VERSION"))
+            },
+        ),
+        UpdateState::Installing => ("Installing the update…".to_string(), "Kudu will close in a moment while it updates.".to_string()),
+        _ => return false,
+    };
+    card(ui, 16, Margin::same(18), |ui| {
+        widgets::sides(
+            ui,
+            Id::new("update-banner"),
+            16.0,
+            |ui| {
+                ui.vertical(|ui| {
+                    ui.spacing_mut().item_spacing.y = 3.0;
+                    ui.label(text(&title, 14.0, Weight::Semibold, pal.text));
+                    wrapped(ui, text(&detail, 12.5, Weight::Regular, pal.secondary));
+                });
+            },
+            |ui| {
+                if matches!(status.update, UpdateState::Available { .. }) {
+                    let label = if cfg!(windows) { "Install update" } else { "Download update" };
+                    if button(ui, label, ButtonKind::Prominent).clicked() {
+                        app.send(Request::InstallUpdate);
+                    }
+                }
+            },
+        );
+    });
+    true
 }
 
 // MARK: - Setup
@@ -88,13 +136,12 @@ fn setup_card(app: &mut App, ui: &mut Ui) {
             ModelStatus::Loading => "Downloaded. Loading it now…".to_string(),
             ModelStatus::Ready => "Downloaded and ready.".to_string(),
             ModelStatus::Downloading { .. } if matches!(status.speech, ModelStatus::Ready | ModelStatus::Loading) => {
-                format!("You can dictate already. Finishing {}, which formats your text…", app.data.settings.writer().id())
+                "You can dictate already. Finishing the writer, which formats your text…".to_string()
             }
             _ => format!(
-                "{} {} + {}: {} download, {} on disk. Works offline after that.",
+                "{}: {} Speech recognition and the writer, {} download ({} on disk). Works offline after that.",
+                choice.name(),
                 choice.summary(),
-                choice.speech().id(),
-                choice.writer().id(),
                 gigabytes(choice.download_bytes()),
                 gigabytes(u64::from(choice.disk_mb()) * 1_000_000)
             ),
@@ -115,7 +162,7 @@ fn setup_card(app: &mut App, ui: &mut Ui) {
                 }
                 let titles: Vec<String> = Pack::ALL
                     .iter()
-                    .map(|p| format!("{} · {}{}", p.id(), gigabytes(p.download_bytes()), if p.is_recommended() { " · recommended" } else { "" }))
+                    .map(|p| format!("{} · {}{}", p.name(), gigabytes(p.download_bytes()), if p.is_recommended() { " · recommended" } else { "" }))
                     .collect();
                 let titles: Vec<&str> = titles.iter().map(String::as_str).collect();
                 let selected = Pack::ALL.iter().position(|p| *p == choice).unwrap_or(1);

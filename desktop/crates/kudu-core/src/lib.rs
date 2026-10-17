@@ -14,6 +14,7 @@ pub mod formatting_need;
 pub mod id;
 pub mod insights;
 pub mod pipeline;
+pub mod release_version;
 pub mod sentence_chunker;
 pub mod shortcut;
 pub mod stages;

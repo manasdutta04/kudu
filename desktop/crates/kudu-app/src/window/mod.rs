@@ -439,7 +439,7 @@ mod tests {
     #[test]
     fn a_pack_downloads_as_one() {
         use ModelStatus::*;
-        let pack = Pack::Basic;
+        let pack = Pack::Base;
         // Speech done, writer halfway: well past half, as the speech model is the bigger file.
         let Downloading { fraction } = combined_status(&Ready, &Downloading { fraction: 0.5 }, pack) else { panic!() };
         assert!(fraction > 0.75 && fraction < 0.9, "{fraction}");

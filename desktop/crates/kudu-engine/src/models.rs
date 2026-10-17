@@ -68,20 +68,30 @@ pub enum Pack {
     #[serde(rename = "kudu-tiny")]
     Tiny,
     #[default]
-    #[serde(rename = "kudu-basic")]
-    Basic,
+    /// Kudu Base. Saved as "kudu-basic" by Kudu 0.1.3.
+    #[serde(rename = "kudu-base", alias = "kudu-basic")]
+    Base,
     #[serde(rename = "kudu-large")]
     Large,
 }
 
 impl Pack {
-    pub const ALL: [Pack; 3] = [Pack::Tiny, Pack::Basic, Pack::Large];
+    pub const ALL: [Pack; 3] = [Pack::Tiny, Pack::Base, Pack::Large];
 
     pub fn id(self) -> &'static str {
         match self {
             Pack::Tiny => "kudu-tiny",
-            Pack::Basic => "kudu-basic",
+            Pack::Base => "kudu-base",
             Pack::Large => "kudu-large",
+        }
+    }
+
+    /// The name people see: "Kudu Base".
+    pub fn name(self) -> &'static str {
+        match self {
+            Pack::Tiny => "Kudu Tiny",
+            Pack::Base => "Kudu Base",
+            Pack::Large => "Kudu Large",
         }
     }
 
@@ -105,7 +115,7 @@ impl Pack {
     pub fn summary(self) -> &'static str {
         match self {
             Pack::Tiny => "Smallest and fastest, for older or low-memory PCs.",
-            Pack::Basic => "The most accurate speech with the compact writer. Recommended.",
+            Pack::Base => "The most accurate speech with the compact writer. Recommended.",
             Pack::Large => "The most accurate speech with the larger writer, for the best formatting.",
         }
     }
@@ -284,6 +294,36 @@ fn agent() -> ureq::Agent {
         .user_agent(concat!("Kudu/", env!("CARGO_PKG_VERSION")))
         .build()
         .into()
+}
+
+/// The address of Kudu's latest release; it redirects to the release's tag.
+const LATEST_RELEASE: &str = "https://github.com/manasdutta04/kudu/releases/latest";
+
+/// The latest released version of Kudu ("0.1.4"), read from where GitHub's "latest release"
+/// address redirects to. Sends nothing but the request itself.
+pub fn latest_release() -> Result<String> {
+    use ureq::tls::{RootCerts, TlsConfig, TlsProvider};
+    let tls = TlsConfig::builder().provider(TlsProvider::NativeTls).root_certs(RootCerts::PlatformVerifier).build();
+    let agent: ureq::Agent = ureq::Agent::config_builder()
+        .tls_config(tls)
+        .user_agent(concat!("Kudu/", env!("CARGO_PKG_VERSION")))
+        .max_redirects(0)
+        .max_redirects_will_error(false)
+        .build()
+        .into();
+    let response = agent.head(LATEST_RELEASE).call().context("Couldn't reach GitHub")?;
+    let location = response
+        .headers()
+        .get("location")
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| anyhow!("GitHub didn't say which release is the latest"))?;
+    let tag = location.trim_end_matches('/').rsplit('/').next().unwrap_or_default();
+    kudu_core::release_version::from_tag(tag).ok_or_else(|| anyhow!("Unexpected release tag: {tag}"))
+}
+
+/// The address of a file in the latest release ("Kudu-Windows-x64-Setup.exe").
+pub fn latest_release_file(name: &str) -> String {
+    format!("{LATEST_RELEASE}/download/{name}")
 }
 
 /// Downloads `url` to `dest` (atomically: a partial file never looks complete), reporting
@@ -471,6 +511,14 @@ mod tests {
         assert_eq!(last, 1.0);
     }
 
+    /// Asks GitHub which release is the latest. Needs the network, so it runs in CI.
+    #[test]
+    #[ignore = "needs the network"]
+    fn reads_the_latest_release() {
+        let version = latest_release().expect("latest release");
+        assert!(kudu_core::release_version::from_tag(&version).is_some(), "{version}");
+    }
+
     #[test]
     fn every_pack_has_a_speech_model_and_a_writer() {
         for pack in Pack::ALL {
@@ -482,7 +530,7 @@ mod tests {
             assert!(pack.disk_mb() <= 1000, "{} is {} MB on disk", pack.id(), pack.disk_mb());
         }
         assert_eq!(Pack::ALL.into_iter().filter(|p| p.is_recommended()).collect::<Vec<_>>(), [Pack::default()]);
-        assert_eq!(Pack::Basic.speech(), SpeechModel::Parakeet);
+        assert_eq!(Pack::Base.speech(), SpeechModel::Parakeet);
         assert_eq!(Pack::Tiny.speech(), SpeechModel::MoonshineBase);
         assert_eq!(Pack::Large.writer(), WriterModel::Base);
     }
@@ -507,7 +555,8 @@ mod tests {
 
     #[test]
     fn packs_are_named_as_in_the_catalogue() {
-        assert_eq!(serde_json::to_string(&Pack::Basic).unwrap(), "\"kudu-basic\"");
+        assert_eq!(serde_json::to_string(&Pack::Base).unwrap(), "\"kudu-base\"");
+        assert_eq!(serde_json::from_str::<Pack>("\"kudu-basic\"").unwrap(), Pack::Base);
         assert_eq!(serde_json::from_str::<WriterModel>("\"kudu-writer-base\"").unwrap(), WriterModel::Base);
         assert_eq!(serde_json::from_str::<SpeechModel>("\"moonshine-base\"").unwrap(), SpeechModel::MoonshineBase);
     }
