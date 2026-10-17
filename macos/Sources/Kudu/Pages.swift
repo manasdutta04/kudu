@@ -601,10 +601,10 @@ struct SettingsPage: View {
                         .foregroundStyle(.secondary)
                 }
                 Row(title: "Speech model") {
-                    Text("NVIDIA Parakeet TDT 0.6B v2, on device").foregroundStyle(.secondary)
+                    Text("kudu-speech-base · NVIDIA Parakeet TDT 0.6B v2, on device").foregroundStyle(.secondary)
                 }
                 Row(title: "Formatting & commands", divider: false) {
-                    Text(controller.smartFormattingAvailable ? "Apple on-device model" : "Rules only").foregroundStyle(.secondary)
+                    Text(controller.smartFormattingAvailable ? "Apple Intelligence, on device" : "Rules only").foregroundStyle(.secondary)
                 }
             }
         }

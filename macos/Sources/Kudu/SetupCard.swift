@@ -56,7 +56,7 @@ struct SetupCard: View {
                     accessibilityHelp
                     SetupStep(
                         number: 3, title: "Speech model",
-                        detail: "Parakeet, about 450 MB, downloaded once. Works offline after that.",
+                        detail: "kudu-speech-base (NVIDIA Parakeet TDT 0.6B v2), about 450 MB, downloaded once. Works offline after that.",
                         done: modelDone
                     ) {
                         modelAction
