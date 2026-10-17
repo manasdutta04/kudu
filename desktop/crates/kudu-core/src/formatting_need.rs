@@ -30,7 +30,13 @@ static STRUCTURE_CUE: LazyLock<Regex> = LazyLock::new(|| {
         r"(?i)\b(first(ly)?|second(ly)?|third(ly)?|fourth|finally|number (one|two|three)|bullet|step (one|two|three)|next point|",
         r"(two|three|four|five) things|tag [a-z]+|",
         r"squared|cubed|derivative|integral|square root|",
-        r"kilo|kilos|kilogram|grams|litre|liter|kilometer|kilometre|percent|",
+        r"kilos?|kilograms?|grams|litres?|liters?|kilometers?|kilometres?|percent|o'clock|",
+        // Dates said as ordinals: "the twelfth of March", "March twenty first".
+        r"(fifth|sixth|seventh|eighth|ninth|tenth|eleventh|twelfth|thirteenth|fourteenth|fifteenth|sixteenth|",
+        r"seventeenth|eighteenth|nineteenth|twentieth|thirtieth|(twenty|thirty) (first|second|third|fourth|fifth|",
+        r"sixth|seventh|eighth|ninth))|",
+        // Counts in words: "forty five people".
+        r"(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)[ -](one|two|three|four|five|six|seven|eight|nine)|",
         r"(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million)( |-)?(percent|dollars|rupees|euros|pounds|thousand|million|hundred|o'clock|thirty|fifteen|forty five|am|pm))\b",
     ))
     .unwrap()
@@ -105,6 +111,18 @@ mod tests {
         assert!(!should_format_code("yes", Light));
         assert!(should("add two kilo atta", Light));
         assert!(should("quick update three things first design", Light));
+    }
+
+    #[test]
+    fn units_dates_and_counts_in_words_use_it() {
+        assert!(should("the package weighs three kilograms", Light));
+        assert!(should("we walked five kilometers today", Light));
+        assert!(should("we need two litres of milk", Light));
+        assert!(should("the launch is on the twelfth of March", Light));
+        assert!(should("see you on March twenty first", Light));
+        assert!(should("forty five people signed up", Light));
+        assert!(should("meet me at eight o'clock", Light));
+        assert!(!should("the fifth wheel of the team", Verbatim));
     }
 
     #[test]
