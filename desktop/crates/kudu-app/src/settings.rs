@@ -2,7 +2,7 @@
 //! files with the same format as the Mac app's, so they can be copied between computers.
 
 use kudu_core::shortcut::Shortcuts;
-use kudu_engine::{SmartModel, SpeechModel};
+use kudu_engine::{Pack, SpeechModel, WriterModel};
 use serde::{Deserialize, Serialize};
 
 /// How the dictation shortcut starts and stops recording.
@@ -76,9 +76,15 @@ pub struct Settings {
     pub recording_mode: RecordingMode,
     /// Microphone name; `None` follows the system default.
     pub microphone: Option<String>,
-    pub speech_model: SpeechModel,
-    /// The downloaded language model for smart formatting and Command mode, if any.
-    pub smart_model: Option<SmartModel>,
+    /// The model pack: a speech model and a writer, downloaded together. Read it with
+    /// `pack()`, which also covers settings files from before packs existed.
+    pub pack: Option<Pack>,
+    /// Older versions' model choices ("parakeet" / "moonshine-base", and an optional "small" /
+    /// "better" language model), read once to pick the matching pack, never written again.
+    #[serde(rename = "speechModel", skip_serializing)]
+    legacy_speech: Option<String>,
+    #[serde(rename = "smartModel", skip_serializing)]
+    legacy_smart: Option<String>,
     pub sounds: bool,
     pub learn_from_corrections: bool,
     /// Read the names and terms in the window you're dictating into, to spell them right.
@@ -94,14 +100,35 @@ impl Default for Settings {
             shortcuts: None,
             recording_mode: RecordingMode::default(),
             microphone: None,
-            speech_model: SpeechModel::Parakeet,
-            smart_model: None,
+            pack: None,
+            legacy_speech: None,
+            legacy_smart: None,
             sounds: true,
             learn_from_corrections: true,
             screen_context: true,
             retention: Retention::default(),
             onboarded: false,
         }
+    }
+}
+
+impl Settings {
+    /// The chosen pack. Settings from before packs map to the closest one: the compact speech
+    /// model → kudu-tiny, the larger language model → kudu-large, anything else → kudu-basic.
+    pub fn pack(&self) -> Pack {
+        self.pack.unwrap_or(match (self.legacy_speech.as_deref(), self.legacy_smart.as_deref()) {
+            (Some("moonshine-base"), _) => Pack::Tiny,
+            (_, Some("better")) => Pack::Large,
+            _ => Pack::default(),
+        })
+    }
+
+    pub fn speech(&self) -> SpeechModel {
+        self.pack().speech()
+    }
+
+    pub fn writer(&self) -> WriterModel {
+        self.pack().writer()
     }
 }
 
@@ -113,8 +140,29 @@ mod tests {
     fn reads_older_or_partial_files() {
         let settings: Settings = serde_json::from_str(r#"{"sounds": false}"#).unwrap();
         assert!(!settings.sounds);
-        assert_eq!(settings.speech_model, SpeechModel::Parakeet);
+        assert_eq!(settings.pack(), Pack::Basic);
+        assert_eq!(settings.speech(), SpeechModel::Parakeet);
         let round_trip: Settings = serde_json::from_str(&serde_json::to_string(&settings).unwrap()).unwrap();
         assert_eq!(round_trip, settings);
+    }
+
+    #[test]
+    fn older_model_choices_become_packs() {
+        let pack = |json: &str| serde_json::from_str::<Settings>(json).unwrap().pack();
+        assert_eq!(pack(r#"{"speechModel": "moonshine-base", "smartModel": "small"}"#), Pack::Tiny);
+        assert_eq!(pack(r#"{"speechModel": "parakeet", "smartModel": "better"}"#), Pack::Large);
+        assert_eq!(pack(r#"{"speechModel": "parakeet", "smartModel": "small"}"#), Pack::Basic);
+        assert_eq!(pack(r#"{"speechModel": "parakeet", "smartModel": null}"#), Pack::Basic);
+        assert_eq!(pack(r#"{"pack": "kudu-large", "speechModel": "moonshine-base"}"#), Pack::Large);
+    }
+
+    #[test]
+    fn the_old_model_keys_are_not_written_back() {
+        let old: Settings = serde_json::from_str(r#"{"speechModel": "moonshine-base", "smartModel": "better"}"#).unwrap();
+        let mut migrated = old.clone();
+        migrated.pack = Some(old.pack());
+        let json = serde_json::to_string(&migrated).unwrap();
+        assert!(json.contains(r#""pack":"kudu-tiny""#), "{json}");
+        assert!(!json.contains("speechModel") && !json.contains("smartModel"), "{json}");
     }
 }

@@ -8,7 +8,7 @@ use std::time::SystemTime;
 use kudu_core::calendar::unix_seconds;
 use kudu_core::shortcut::Shortcuts;
 use kudu_core::{Calendar, CleanupSettings, DayTotal, Day, DictationRecord, DictionaryEntry, Insights, Snippet, UsageStats};
-use kudu_engine::{SmartModel, SpeechModel};
+use kudu_engine::{SpeechModel, WriterModel};
 
 use crate::paths::{modified, read_json, write_json, Paths};
 use crate::settings::Settings;
@@ -48,7 +48,7 @@ pub struct Data {
     pub calendar: Calendar,
     /// Which models are on disk (checked when files or the status change).
     pub speech_installed: Vec<SpeechModel>,
-    pub smart_installed: Vec<SmartModel>,
+    pub writer_installed: Vec<WriterModel>,
     /// Bumped whenever the history changes, for cached views of it.
     pub history_version: u64,
     stamps: [Option<SystemTime>; 6],
@@ -71,7 +71,7 @@ impl Data {
             insights: Insights::compute(&HashMap::new(), now, Insights::DEFAULT_WEEKS, &calendar),
             calendar,
             speech_installed: Vec::new(),
-            smart_installed: Vec::new(),
+            writer_installed: Vec::new(),
             history_version: 0,
             stamps: [None; 6],
         };
@@ -143,7 +143,7 @@ impl Data {
     pub fn check_models(&mut self) {
         let models = &self.paths.models;
         self.speech_installed = SpeechModel::ALL.into_iter().filter(|m| m.is_installed(models)).collect();
-        self.smart_installed = SmartModel::ALL.into_iter().filter(|m| m.is_installed(models)).collect();
+        self.writer_installed = WriterModel::ALL.into_iter().filter(|m| m.is_installed(models)).collect();
     }
 
     /// The shortcuts in effect (the platform defaults until the user changes one).

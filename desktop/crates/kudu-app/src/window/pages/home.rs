@@ -8,7 +8,7 @@ use eframe::egui::{
     Sense, Shape, Ui, Vec2,
 };
 use kudu_core::Day;
-use kudu_engine::SpeechModel;
+use kudu_engine::Pack;
 
 use crate::ipc::{ModelStatus, Request};
 use crate::settings::RecordingMode;
@@ -47,7 +47,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     ui.label(RichText::new(format!("Welcome back, {}", app.first_name)).font(display(32.0)).color(pal.text));
     ui.add_space(26.0);
 
-    if app.status.is_some() && !app.is_ready() {
+    if app.status.is_some() && !app.setup_complete() {
         setup_card(app, ui);
         ui.add_space(26.0);
     }
@@ -80,18 +80,26 @@ fn setup_card(app: &mut App, ui: &mut Ui) {
         ui.add_space(18.0);
 
         let mut number = 1;
-        // 1. The speech model.
-        let model_done = matches!(status.speech, ModelStatus::Ready | ModelStatus::Loading);
-        let detail = match &status.speech {
+        // 1. The model pack: speech and writer, downloaded together.
+        let pack_status = app.pack_status().unwrap_or_default();
+        let model_done = matches!(pack_status, ModelStatus::Ready | ModelStatus::Loading);
+        let choice = app.setup_choice;
+        let detail = match &pack_status {
             ModelStatus::Loading => "Downloaded. Loading it now…".to_string(),
             ModelStatus::Ready => "Downloaded and ready.".to_string(),
+            ModelStatus::Downloading { .. } if matches!(status.speech, ModelStatus::Ready | ModelStatus::Loading) => {
+                format!("You can dictate already. Finishing {}, which formats your text…", app.data.settings.writer().id())
+            }
             _ => format!(
-                "{} About {} MB, downloaded once. Works offline after that.",
-                app.setup_choice.summary(),
-                app.setup_choice.download_mb()
+                "{} {} + {}: {} download, {} on disk. Works offline after that.",
+                choice.summary(),
+                choice.speech().id(),
+                choice.writer().id(),
+                gigabytes(choice.download_bytes()),
+                gigabytes(u64::from(choice.disk_mb()) * 1_000_000)
             ),
         };
-        step(ui, number, "Speech model", &detail, model_done, |ui| match &status.speech {
+        step(ui, number, "Choose your pack", &detail, model_done, |ui| match &pack_status {
             ModelStatus::Downloading { fraction } => {
                 if button(ui, "Cancel", ButtonKind::Quiet).clicked() {
                     app.send(Request::CancelDownload);
@@ -100,23 +108,24 @@ fn setup_card(app: &mut App, ui: &mut Ui) {
                 widgets::progress_bar(ui, *fraction as f32, 140.0);
             }
             ModelStatus::Missing | ModelStatus::Failed { .. } => {
-                let label = if matches!(status.speech, ModelStatus::Failed { .. }) { "Try again" } else { "Download" };
+                let label = if matches!(pack_status, ModelStatus::Failed { .. }) { "Try again" } else { "Download" };
                 if button(ui, label, ButtonKind::Prominent).clicked() {
-                    // The background process saves the choice and downloads it.
-                    app.pending_speech = Some(app.setup_choice);
-                    app.send(Request::DownloadSpeechModel { model: app.setup_choice });
+                    // The background process saves the choice and downloads what's missing.
+                    app.send(Request::DownloadPack { pack: choice });
                 }
-                let titles: Vec<String> =
-                    SpeechModel::ALL.iter().map(|m| format!("{} · {} MB", m.title(), m.download_mb())).collect();
+                let titles: Vec<String> = Pack::ALL
+                    .iter()
+                    .map(|p| format!("{} · {}{}", p.id(), gigabytes(p.download_bytes()), if p.is_recommended() { " · recommended" } else { "" }))
+                    .collect();
                 let titles: Vec<&str> = titles.iter().map(String::as_str).collect();
-                let selected = SpeechModel::ALL.iter().position(|m| *m == app.setup_choice).unwrap_or(0);
+                let selected = Pack::ALL.iter().position(|p| *p == choice).unwrap_or(1);
                 if let Some(index) = widgets::chip_picker(ui, Id::new("setup-model"), &titles, selected, None) {
-                    app.setup_choice = SpeechModel::ALL[index];
+                    app.setup_choice = Pack::ALL[index];
                 }
             }
             ModelStatus::Loading | ModelStatus::Ready => {}
         });
-        if let ModelStatus::Failed { message } = &status.speech {
+        if let ModelStatus::Failed { message } = &pack_status {
             indented(ui, |ui| {
                 wrapped(ui, text(message, 11.5, Weight::Regular, pal.red));
             });
@@ -479,4 +488,9 @@ fn history_row(app: &App, ui: &mut Ui, index: usize, first: bool, last: bool) ->
         ui.painter().set(background, RectShape::filled(rect.shrink(1.0), radius, pal.hover));
     }
     deleted
+}
+
+/// Pack sizes in gigabytes, so the three compare at a glance: "0.71 GB".
+pub fn gigabytes(bytes: u64) -> String {
+    format!("{:.2} GB", bytes as f64 / 1e9)
 }

@@ -31,10 +31,12 @@ pub enum Request {
     Reload,
     RecordShortcut { slot: ShortcutSlot },
     CancelRecording,
-    DownloadSpeechModel { model: kudu_engine::SpeechModel },
-    DownloadSmartModel { model: kudu_engine::SmartModel },
+    /// Choose a pack: download whatever of it isn't on disk yet (speech first, then the
+    /// writer), and switch to it.
+    DownloadPack { pack: kudu_engine::Pack },
     CancelDownload,
-    RemoveSmartModel,
+    /// Delete downloaded models the chosen pack doesn't use.
+    RemoveUnusedModels,
     SetLaunchAtLogin { enabled: bool },
     PasteLast,
     Quit,
@@ -45,6 +47,7 @@ pub enum Request {
 #[serde(rename_all = "camelCase")]
 pub struct Status {
     pub speech: ModelStatus,
+    /// The writer model (smart formatting and Command mode).
     pub smart: ModelStatus,
     pub hotkeys_active: bool,
     pub recording: bool,
@@ -153,9 +156,17 @@ mod tests {
         let mut buffer = Vec::new();
         send(&mut buffer, &Request::RecordShortcut { slot: ShortcutSlot::Command }).unwrap();
         send(&mut buffer, &Request::Reload).unwrap();
+        send(&mut buffer, &Request::DownloadPack { pack: kudu_engine::Pack::Large }).unwrap();
         let mut received = Vec::new();
         receive::<Request>(&buffer[..], |m| received.push(m));
-        assert_eq!(received, vec![Request::RecordShortcut { slot: ShortcutSlot::Command }, Request::Reload]);
+        assert_eq!(
+            received,
+            vec![
+                Request::RecordShortcut { slot: ShortcutSlot::Command },
+                Request::Reload,
+                Request::DownloadPack { pack: kudu_engine::Pack::Large }
+            ]
+        );
 
         let mut buffer = Vec::new();
         send(&mut buffer, &Event::Status(Status { speech: ModelStatus::Downloading { fraction: 0.5 }, ..Default::default() })).unwrap();

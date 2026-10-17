@@ -1,7 +1,7 @@
-//! Settings: shortcuts, dictation, the speech model, smart formatting, general and about.
+//! Settings: shortcuts, dictation, the model pack, general and about.
 
 use eframe::egui::{self, vec2, Color32, Frame, Id, Margin, Modal, Sense, Stroke, StrokeKind, Ui, Vec2};
-use kudu_engine::{SmartModel, SpeechModel};
+use kudu_engine::Pack;
 
 use crate::ipc::{ModelStatus, Request, ShortcutSlot};
 use crate::settings::{RecordingMode, Retention};
@@ -9,7 +9,8 @@ use crate::window::data::{default_shortcuts, grouped};
 use crate::window::icons::{self, Icon};
 use crate::window::theme::{font, Palette, Weight};
 use crate::window::widgets::{self, button, keycap, keycaps, text, wrapped, ButtonKind};
-use crate::window::App;
+use crate::window::pages::home::gigabytes;
+use crate::window::{App, WRITER};
 
 const REPOSITORY: &str = "https://github.com/manasdutta04/kudu";
 
@@ -20,9 +21,7 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     ui.add_space(24.0);
     dictation(app, ui);
     ui.add_space(24.0);
-    speech_model(app, ui);
-    ui.add_space(24.0);
-    smart_formatting(app, ui);
+    models(app, ui);
     ui.add_space(24.0);
     general(app, ui);
     ui.add_space(24.0);
@@ -352,71 +351,51 @@ fn model_row(ui: &mut Ui, info: ModelInfo<'_>, divider: bool, control: impl FnOn
     }
 }
 
-fn speech_model(app: &mut App, ui: &mut Ui) {
-    let current = app.data.settings.speech_model;
-    let state = app.status.as_ref().map(|s| s.speech.clone());
-    let mut chosen: Option<(SpeechModel, ModelAction)> = None;
-    widgets::section(ui, "Speech model", Some("Runs on this computer and works offline once downloaded."), |ui| {
-        for (index, model) in SpeechModel::ALL.into_iter().enumerate() {
-            let selected = model == current;
-            let installed = app.data.speech_installed.contains(&model);
-            let size = format!("{} MB download", model.download_mb());
-            let failure = match (&state, selected) {
-                (Some(ModelStatus::Failed { message }), true) => Some(message.as_str()),
-                _ => None,
-            };
-            let last = index + 1 == SpeechModel::ALL.len();
-            let info = ModelInfo { title: model.title(), size: &size, summary: model.summary(), selected, failure };
-            model_row(ui, info, !last, |ui| {
-                if let Some(action) = model_control(ui, state.as_ref(), selected, installed, false) {
-                    chosen = Some((model, action));
-                }
-            });
-        }
-    });
-    match chosen {
-        Some((model, ModelAction::Use)) => {
-            // Already downloaded: switch to it (the background process loads it on reload).
-            app.data.update_settings(|s| s.speech_model = model);
-            app.send(Request::Reload);
-        }
-        Some((model, ModelAction::Download)) => {
-            app.pending_speech = Some(model);
-            app.send(Request::DownloadSpeechModel { model });
-        }
-        Some((_, ModelAction::Cancel)) => app.send(Request::CancelDownload),
-        Some((_, ModelAction::Remove)) | None => {}
-    }
-}
-
-fn smart_formatting(app: &mut App, ui: &mut Ui) {
+fn models(app: &mut App, ui: &mut Ui) {
     let pal = Palette::of(ui);
-    let current = app.data.settings.smart_model;
-    let state = app.status.as_ref().map(|s| s.smart.clone());
-    let mut chosen: Option<(SmartModel, ModelAction)> = None;
+    let current = app.data.settings.pack();
+    let state = app.pack_status();
+    let mut chosen: Option<(Pack, ModelAction)> = None;
     let command = app.data.shortcuts().command.map(|s| s.display(app.notation));
-    let active = current.is_some_and(|m| app.data.smart_installed.contains(&m))
-        && !matches!(state, Some(ModelStatus::Downloading { .. } | ModelStatus::Failed { .. }));
+    let writer_ready = app.status.as_ref().is_some_and(|s| matches!(s.smart, ModelStatus::Ready | ModelStatus::Loading));
+    let installed = |pack: Pack| {
+        app.data.speech_installed.contains(&pack.speech()) && (!WRITER || app.data.writer_installed.contains(&pack.writer()))
+    };
+    let unused = app.data.speech_installed.iter().any(|m| *m != current.speech())
+        || app.data.writer_installed.iter().any(|m| *m != current.writer());
     widgets::section(
         ui,
-        "Smart formatting (optional download)",
-        Some("Lists, numbers and Command mode with a small model that runs on your PC. Nothing leaves this computer."),
+        "Models",
+        Some("Each pack is a speech model plus a writer that formats your text and runs Command mode. Both run on this PC and work offline once downloaded."),
         |ui| {
-            for model in SmartModel::ALL {
-                let selected = Some(model) == current;
-                let installed = app.data.smart_installed.contains(&model);
-                let size = format!("~{} download", megabytes(model.download_mb()));
+            for pack in Pack::ALL {
+                let selected = pack == current;
+                let size = format!("{} download · {} on disk", gigabytes(pack.download_bytes()), gigabytes(u64::from(pack.disk_mb()) * 1_000_000));
+                let summary = format!("{} {} + {}.", pack.summary(), pack.speech().id(), pack.writer().id());
                 let failure = match (&state, selected) {
                     (Some(ModelStatus::Failed { message }), true) => Some(message.as_str()),
                     _ => None,
                 };
-                let info = ModelInfo { title: model.title(), size: &size, summary: model.summary(), selected, failure };
+                let info = ModelInfo { title: pack.id(), size: &size, summary: &summary, selected, failure };
+                let on_disk = installed(pack);
                 model_row(ui, info, true, |ui| {
-                    if let Some(action) = model_control(ui, state.as_ref(), selected, installed, true) {
-                        chosen = Some((model, action));
+                    if let Some(action) = model_control(ui, state.as_ref(), selected, on_disk, false) {
+                        chosen = Some((pack, action));
                     }
                 });
             }
+            let credits = format!(
+                "{}: {}. {}: {}.",
+                current.speech().id(),
+                current.speech().credit(),
+                current.writer().id(),
+                current.writer().credit()
+            );
+            widgets::row(ui, "What's inside", Some(&credits), true, |ui| {
+                if widgets::button_enabled(ui, "Remove unused models", ButtonKind::Quiet, unused).clicked() {
+                    app.send(Request::RemoveUnusedModels);
+                }
+            });
             let title = match &command {
                 Some(keys) => format!("Command mode: select text, hold {keys} and say what to do"),
                 None => "Command mode: select text, hold the Command shortcut and say what to do".to_string(),
@@ -427,7 +406,7 @@ fn smart_formatting(app: &mut App, ui: &mut Ui) {
                 Some("“Make this more formal” · “Translate to Hindi” · “Fix the grammar” · “Summarize”. With nothing selected, Kudu writes it: “Write a polite reply saying I'll be late.”"),
                 false,
                 |ui| {
-                    if active {
+                    if writer_ready {
                         ui.horizontal(|ui| {
                             ui.spacing_mut().item_spacing.x = 5.0;
                             ui.label(text("On this PC", 11.5, Weight::Medium, pal.accent));
@@ -435,28 +414,16 @@ fn smart_formatting(app: &mut App, ui: &mut Ui) {
                             icons::sparkle(ui.painter(), rect.center(), 5.5, pal.accent);
                         });
                     } else {
-                        ui.label(text("Needs a model", 11.5, Weight::Regular, pal.secondary));
+                        ui.label(text("Needs the writer", 11.5, Weight::Regular, pal.secondary));
                     }
                 },
             );
         },
     );
     match chosen {
-        Some((model, ModelAction::Use | ModelAction::Download)) => {
-            app.pending_smart = Some(model);
-            app.send(Request::DownloadSmartModel { model });
-        }
+        Some((pack, ModelAction::Use | ModelAction::Download)) => app.send(Request::DownloadPack { pack }),
         Some((_, ModelAction::Cancel)) => app.send(Request::CancelDownload),
-        Some((_, ModelAction::Remove)) => app.send(Request::RemoveSmartModel),
-        None => {}
-    }
-}
-
-fn megabytes(mb: u32) -> String {
-    if mb >= 1000 {
-        format!("{:.1} GB", mb as f64 / 1000.0)
-    } else {
-        format!("{mb} MB")
+        Some((_, ModelAction::Remove)) | None => {}
     }
 }
 
@@ -511,13 +478,13 @@ fn general(app: &mut App, ui: &mut Ui) {
 
 fn about(app: &mut App, ui: &mut Ui) {
     let pal = Palette::of(ui);
-    let speech = app.data.settings.speech_model.summary().split(':').next().unwrap_or_default().to_string();
+    let pack = app.data.settings.pack();
     widgets::section(ui, "About", None, |ui| {
         widgets::row(ui, "Version", None, true, |ui| {
             ui.label(text(env!("CARGO_PKG_VERSION"), 13.0, Weight::Regular, pal.secondary));
         });
-        widgets::row(ui, "Speech model", None, true, |ui| {
-            ui.label(text(format!("{speech}, on this computer"), 13.0, Weight::Regular, pal.secondary));
+        widgets::row(ui, "Models", None, true, |ui| {
+            ui.label(text(format!("{}, on this computer", pack.id()), 13.0, Weight::Regular, pal.secondary));
         });
         widgets::row(ui, "Everything stays on this computer.", Some("Kudu is open source under the MIT license."), false, |ui| {
             let response = link(ui, "github.com/manasdutta04/kudu");

@@ -61,14 +61,32 @@ pub fn run(args: &[String], paths: Paths) -> Result<()> {
     }
 
     let models = controller.store.paths.models.clone();
-    let speech_model = controller.store.settings.speech_model;
+    // Settle on a pack (settings from older versions name a speech model and an optional
+    // language model instead), and delete the general-purpose models Kudu's writers replace.
+    let pack = controller.store.settings.pack();
+    if controller.store.settings.pack != Some(pack) {
+        controller.store.settings.pack = Some(pack);
+        controller.store.save_settings();
+    }
+    let removed = kudu_engine::models::remove_legacy_models(&models);
+    if removed > 0 {
+        log::info!("Removed {removed} old language model file(s)");
+    }
+    let speech_model = pack.speech();
     if speech_model.is_installed(&models) {
         controller.speech = ModelStatus::Loading;
         let _ = jobs.send(Job::LoadSpeech { model: speech_model, models: models.clone() });
     }
-    if let Some(smart) = controller.store.settings.smart_model.filter(|m| m.is_installed(&models)) {
+    let writer = pack.writer();
+    if WRITER && writer.is_installed(&models) {
         controller.smart = ModelStatus::Loading;
-        let _ = jobs.send(Job::LoadSmart { model: smart, models: models.clone() });
+        let _ = jobs.send(Job::LoadSmart { model: writer, models: models.clone() });
+    }
+    let downloads = Downloads::new(platform_tx.clone());
+    // Updated from a version without the writer: fetch it now (dictation works meanwhile).
+    if WRITER && speech_model.is_installed(&models) && !writer.is_installed(&models) {
+        controller.smart = ModelStatus::Downloading { fraction: 0.0 };
+        downloads.pack(None, Some(writer), models.clone());
     }
     controller.idle_status();
     controller.refresh_microphones();
@@ -78,7 +96,6 @@ pub fn run(args: &[String], paths: Paths) -> Result<()> {
         window.open(&controller.status());
     }
 
-    let downloads = Downloads::new(platform_tx.clone());
     let ticker = tick(Duration::from_millis(250));
     let mut ticks: u64 = 0;
     loop {
@@ -133,7 +150,7 @@ fn handle_request(controller: &mut Controller, downloads: &Downloads, jobs: &cro
             controller.settings_reloaded();
             let models = controller.store.paths.models.clone();
             // A newly chosen speech model that's already downloaded: switch to it.
-            let wanted = controller.store.settings.speech_model;
+            let wanted = controller.store.settings.speech();
             if wanted.is_installed(&models) && controller.speech != ModelStatus::Loading {
                 let _ = jobs.send(Job::LoadSpeech { model: wanted, models });
                 controller.speech = ModelStatus::Loading;
@@ -142,38 +159,41 @@ fn handle_request(controller: &mut Controller, downloads: &Downloads, jobs: &cro
         }
         Request::RecordShortcut { slot } => controller.record_shortcut(slot),
         Request::CancelRecording => controller.cancel_shortcut_recording(),
-        Request::DownloadSpeechModel { model } => {
-            controller.store.settings.speech_model = model;
+        Request::DownloadPack { pack } => {
+            let previous = controller.store.settings.pack();
+            controller.store.settings.pack = Some(pack);
             controller.store.save_settings();
-            if model.is_installed(&controller.store.paths.models) {
-                controller.speech = ModelStatus::Loading;
-                let _ = jobs.send(Job::LoadSpeech { model, models: controller.store.paths.models.clone() });
-            } else {
+            let models = controller.store.paths.models.clone();
+            let (speech, writer) = (pack.speech(), pack.writer());
+            let mut fetch_speech = None;
+            if !speech.is_installed(&models) {
                 controller.speech = ModelStatus::Downloading { fraction: 0.0 };
-                downloads.speech(model, controller.store.paths.models.clone());
+                fetch_speech = Some(speech);
+            } else if speech != previous.speech() || !matches!(controller.speech, ModelStatus::Ready | ModelStatus::Loading) {
+                controller.speech = ModelStatus::Loading;
+                let _ = jobs.send(Job::LoadSpeech { model: speech, models: models.clone() });
             }
-            controller.send_status();
-        }
-        Request::DownloadSmartModel { model } => {
-            controller.store.settings.smart_model = Some(model);
-            controller.store.save_settings();
-            if model.is_installed(&controller.store.paths.models) {
-                controller.smart = ModelStatus::Loading;
-                let _ = jobs.send(Job::LoadSmart { model, models: controller.store.paths.models.clone() });
-            } else {
-                controller.smart = ModelStatus::Downloading { fraction: 0.0 };
-                downloads.smart(model, controller.store.paths.models.clone());
+            let mut fetch_writer = None;
+            if WRITER {
+                if !writer.is_installed(&models) {
+                    controller.smart = ModelStatus::Downloading { fraction: 0.0 };
+                    fetch_writer = Some(writer);
+                } else if writer != previous.writer() || !matches!(controller.smart, ModelStatus::Ready | ModelStatus::Loading) {
+                    controller.smart = ModelStatus::Loading;
+                    let _ = jobs.send(Job::LoadSmart { model: writer, models: models.clone() });
+                }
+            }
+            if fetch_speech.is_some() || fetch_writer.is_some() {
+                downloads.pack(fetch_speech, fetch_writer, models);
             }
             controller.send_status();
         }
         Request::CancelDownload => downloads.cancel(),
-        Request::RemoveSmartModel => {
-            if let Some(model) = controller.store.settings.smart_model.take() {
-                let _ = jobs.send(Job::UnloadSmart);
-                let _ = kudu_engine::models::remove_smart_model(model, &controller.store.paths.models);
+        Request::RemoveUnusedModels => {
+            let pack = controller.store.settings.pack();
+            if let Err(error) = kudu_engine::models::remove_unused(pack, &controller.store.paths.models) {
+                log::error!("Couldn't remove unused models: {error:#}");
             }
-            controller.store.save_settings();
-            controller.smart = ModelStatus::Missing;
             controller.send_status();
         }
         Request::SetLaunchAtLogin { enabled } => {
@@ -186,6 +206,10 @@ fn handle_request(controller: &mut Controller, downloads: &Downloads, jobs: &cro
         Request::Quit => {}
     }
 }
+
+/// Whether this build runs a writer model (smart formatting and Command mode). On Windows and
+/// Linux the writer is part of every pack; a build without llama.cpp uses the rules only.
+const WRITER: bool = cfg!(feature = "smart");
 
 /// Runs `work`, turning a crash inside it into an error message instead of losing it.
 fn guarded<T>(work: impl FnOnce() -> Result<T, String>) -> Result<T, String> {
@@ -210,7 +234,9 @@ enum DownloadEvent {
     SpeechProgress(f64),
     SpeechDone(kudu_engine::SpeechModel, Result<(), String>),
     SmartProgress(f64),
-    SmartDone(kudu_engine::SmartModel, Result<(), String>),
+    SmartDone(kudu_engine::WriterModel, Result<(), String>),
+    /// The writer wasn't downloaded because the speech model's download stopped first.
+    SmartSkipped,
 }
 
 impl Downloads {
@@ -226,43 +252,49 @@ impl Downloads {
         self.cancelled.store(true, Ordering::SeqCst);
     }
 
-    fn speech(&self, model: kudu_engine::SpeechModel, models: std::path::PathBuf) {
+    /// Downloads a pack's missing models on one thread: the speech model first (so dictation
+    /// can start), then the writer.
+    fn pack(&self, speech: Option<kudu_engine::SpeechModel>, writer: Option<kudu_engine::WriterModel>, models: std::path::PathBuf) {
         self.cancelled.store(false, Ordering::SeqCst);
         let (tx, cancelled) = (self.events.0.clone(), self.cancelled.clone());
         std::thread::spawn(move || {
-            let progress_tx = tx.clone();
-            let result = guarded(|| {
-                kudu_engine::models::install_speech_model(
-                    model,
-                    &models,
-                    &mut |f| {
-                        let _ = progress_tx.send(DownloadEvent::SpeechProgress(f));
-                    },
-                    &|| cancelled.load(Ordering::SeqCst),
-                )
-                .map_err(|e| format!("{e:#}"))
-            });
-            let _ = tx.send(DownloadEvent::SpeechDone(model, result));
-        });
-    }
-
-    fn smart(&self, model: kudu_engine::SmartModel, models: std::path::PathBuf) {
-        self.cancelled.store(false, Ordering::SeqCst);
-        let (tx, cancelled) = (self.events.0.clone(), self.cancelled.clone());
-        std::thread::spawn(move || {
-            let progress_tx = tx.clone();
-            let result = guarded(|| {
-                kudu_engine::models::install_smart_model(
-                    model,
-                    &models,
-                    &mut |f| {
-                        let _ = progress_tx.send(DownloadEvent::SmartProgress(f));
-                    },
-                    &|| cancelled.load(Ordering::SeqCst),
-                )
-                .map_err(|e| format!("{e:#}"))
-            });
-            let _ = tx.send(DownloadEvent::SmartDone(model, result));
+            if let Some(model) = speech {
+                let progress_tx = tx.clone();
+                let result = guarded(|| {
+                    kudu_engine::models::install_speech_model(
+                        model,
+                        &models,
+                        &mut |f| {
+                            let _ = progress_tx.send(DownloadEvent::SpeechProgress(f));
+                        },
+                        &|| cancelled.load(Ordering::SeqCst),
+                    )
+                    .map_err(|e| format!("{e:#}"))
+                });
+                let failed = result.is_err();
+                let _ = tx.send(DownloadEvent::SpeechDone(model, result));
+                if failed {
+                    if writer.is_some() {
+                        let _ = tx.send(DownloadEvent::SmartSkipped);
+                    }
+                    return;
+                }
+            }
+            if let Some(model) = writer {
+                let progress_tx = tx.clone();
+                let result = guarded(|| {
+                    kudu_engine::models::install_writer(
+                        model,
+                        &models,
+                        &mut |f| {
+                            let _ = progress_tx.send(DownloadEvent::SmartProgress(f));
+                        },
+                        &|| cancelled.load(Ordering::SeqCst),
+                    )
+                    .map_err(|e| format!("{e:#}"))
+                });
+                let _ = tx.send(DownloadEvent::SmartDone(model, result));
+            }
         });
     }
 
@@ -298,6 +330,7 @@ impl Downloads {
                 let _ = jobs.send(Job::LoadSmart { model, models });
             }
             DownloadEvent::SmartDone(_, Err(message)) => controller.smart = ModelStatus::Failed { message },
+            DownloadEvent::SmartSkipped => controller.smart = ModelStatus::Missing,
         }
         controller.idle_status();
     }

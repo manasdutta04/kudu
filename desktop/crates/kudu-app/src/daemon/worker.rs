@@ -12,7 +12,7 @@ use kudu_core::{
     TextContext, TextPipeline, TextStage,
 };
 use kudu_engine::segmenter::{stitch, stitch_timed};
-use kudu_engine::{SmartModel, SpeechEngine, SpeechModel};
+use kudu_engine::{SpeechEngine, SpeechModel, WriterModel};
 use parking_lot::Mutex;
 
 use super::vocabulary;
@@ -37,8 +37,7 @@ pub struct DictationPlan {
 
 pub enum Job {
     LoadSpeech { model: SpeechModel, models: PathBuf },
-    LoadSmart { model: SmartModel, models: PathBuf },
-    UnloadSmart,
+    LoadSmart { model: WriterModel, models: PathBuf },
     /// A finished phrase of the current dictation (16 kHz), whose first `overlap` seconds were
     /// already part of the previous piece.
     Piece { session: u64, samples: Vec<f32>, overlap: f32 },
@@ -53,7 +52,7 @@ pub enum Job {
 
 pub enum Outcome {
     SpeechLoaded(Result<SpeechModel, String>),
-    SmartLoaded(Result<SmartModel, String>),
+    SmartLoaded(Result<WriterModel, String>),
     Dictation(Finished),
     Command(Result<Finished, String>),
     /// The speech model heard nothing.
@@ -125,13 +124,6 @@ impl Worker {
                 ))
             }
             Job::LoadSmart { model, models } => Some(Outcome::SmartLoaded(self.load_smart(model, models))),
-            Job::UnloadSmart => {
-                #[cfg(feature = "smart")]
-                {
-                    self.smart = None;
-                }
-                None
-            }
             Job::Piece { session, samples, overlap } => {
                 self.join(session, &samples, overlap);
                 None
@@ -234,9 +226,9 @@ impl Worker {
     }
 
     #[cfg(feature = "smart")]
-    fn load_smart(&mut self, model: SmartModel, models: PathBuf) -> Result<SmartModel, String> {
+    fn load_smart(&mut self, model: WriterModel, models: PathBuf) -> Result<WriterModel, String> {
         self.smart = None;
-        kudu_engine::smart::SmartFormatter::load(&model.path(&models))
+        kudu_engine::smart::SmartFormatter::load(&model.path(&models), model.short_prompt())
             .map(|formatter| {
                 self.smart = Some(formatter);
                 model
@@ -245,7 +237,7 @@ impl Worker {
     }
 
     #[cfg(not(feature = "smart"))]
-    fn load_smart(&mut self, _model: SmartModel, _models: PathBuf) -> Result<SmartModel, String> {
+    fn load_smart(&mut self, _model: WriterModel, _models: PathBuf) -> Result<WriterModel, String> {
         Err("This build of Kudu has no smart formatting.".into())
     }
 
@@ -286,7 +278,7 @@ impl Worker {
 
     #[cfg(feature = "smart")]
     fn run_command(&self, instruction: &str, selection: Option<&str>, category: AppCategory) -> Result<String, String> {
-        let smart = self.smart.as_ref().ok_or("Command mode needs the smart formatting download (Settings)")?;
+        let smart = self.smart.as_ref().ok_or("Command mode needs the writer model; see Settings → Models")?;
         smart.command(instruction, selection, category).map_err(|e| format!("{e:#}"))
     }
 

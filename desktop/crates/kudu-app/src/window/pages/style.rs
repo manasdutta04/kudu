@@ -14,11 +14,11 @@ pub fn show(app: &mut App, ui: &mut Ui) {
     ui.add_space(24.0);
 
     let mut cleanup = app.data.cleanup;
-    let smart = app.data.settings.smart_model.is_some_and(|m| app.data.smart_installed.contains(&m));
-    let footer = if smart {
-        "Lists, numbers and long passages are formatted by the small model on this PC while you speak, so text still lands almost instantly. Nothing leaves this computer."
+    let writer = app.data.writer_installed.contains(&app.data.settings.writer());
+    let footer = if writer {
+        "Lists, numbers and long passages are formatted by Kudu's writer model on this PC while you speak, so text still lands almost instantly. Nothing leaves this computer."
     } else {
-        "Light and Polished format lists, numbers and long passages with smart formatting, an optional download in Settings. Until then Kudu uses its instant cleanup rules."
+        "Light and Polished format lists, numbers and long passages with Kudu's writer model, part of your model pack (Settings → Models). Until it's downloaded Kudu uses its instant cleanup rules."
     };
     widgets::section(ui, "Editing", Some(footer), |ui| {
         Frame::new().inner_margin(Margin::same(18)).show(ui, |ui| {

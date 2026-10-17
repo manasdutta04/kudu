@@ -19,7 +19,7 @@ use eframe::egui::{
     Vec2, ViewportCommand,
 };
 use kudu_core::shortcut::Notation;
-use kudu_engine::{SmartModel, SpeechModel};
+use kudu_engine::Pack;
 
 use crate::ipc::{self, Event, ModelStatus, Request, ShortcutSlot, Status};
 use crate::paths::{modified, Paths};
@@ -153,11 +153,8 @@ pub struct App {
     pub recording: Option<ShortcutSlot>,
     pub preview: Vec<String>,
     pub shortcut_error: Option<String>,
-    /// Models asked for that aren't on disk yet.
-    pub pending_speech: Option<SpeechModel>,
-    pub pending_smart: Option<SmartModel>,
-    /// The speech model chosen on the setup card.
-    pub setup_choice: SpeechModel,
+    /// The pack chosen on the setup card.
+    pub setup_choice: Pack,
     pub home: pages::home::HomeState,
     pub dictionary: pages::lists::ListState,
     pub snippets: pages::lists::ListState,
@@ -166,7 +163,7 @@ pub struct App {
 
 impl App {
     fn new(data: Data, receiver: Receiver<Message>) -> Self {
-        let setup_choice = data.settings.speech_model;
+        let setup_choice = data.settings.pack();
         Self {
             data,
             status: None,
@@ -177,8 +174,6 @@ impl App {
             recording: None,
             preview: Vec::new(),
             shortcut_error: None,
-            pending_speech: None,
-            pending_smart: None,
             setup_choice,
             home: Default::default(),
             dictionary: Default::default(),
@@ -206,7 +201,6 @@ impl App {
                     self.status = Some(status);
                     if models_changed {
                         self.data.check_models();
-                        self.adopt_downloaded_models();
                     }
                 }
                 Message::Event(Event::RecordingPreview { keys }) => self.preview = keys,
@@ -236,23 +230,23 @@ impl App {
                 }
                 Message::Closed => ctx.send_viewport_cmd(ViewportCommand::Close),
                 Message::FilesChanged => {
-                    if self.data.reload_changed() {
-                        self.adopt_downloaded_models();
-                    }
+                    self.data.reload_changed();
                 }
             }
         }
     }
 
-    /// Forgets requested models once they're on disk (the background process saves the
-    /// choice in settings.json when it starts a download).
-    fn adopt_downloaded_models(&mut self) {
-        if self.pending_speech.is_some_and(|m| self.data.speech_installed.contains(&m)) {
-            self.pending_speech = None;
-        }
-        if self.pending_smart.is_some_and(|m| self.data.smart_installed.contains(&m)) {
-            self.pending_smart = None;
-        }
+    /// The chosen pack's state: its speech model and writer together, with one progress
+    /// fraction weighted by download size.
+    pub fn pack_status(&self) -> Option<ModelStatus> {
+        let status = self.status.as_ref()?;
+        Some(combined_status(&status.speech, &status.smart, self.data.settings.pack()))
+    }
+
+    /// Whether setup is finished: dictation works and the pack's writer is in place too.
+    pub fn setup_complete(&self) -> bool {
+        self.is_ready()
+            && (!WRITER || self.status.as_ref().is_some_and(|s| matches!(s.smart, ModelStatus::Ready | ModelStatus::Loading)))
     }
 
     /// Whether everything needed to dictate is in place.
@@ -405,5 +399,54 @@ impl eframe::App for App {
         self.content(&mut child);
 
         pages::settings::confirm_dialog(self, ui);
+    }
+}
+
+/// Whether this build runs a writer model; without llama.cpp, Kudu uses the rules only.
+pub const WRITER: bool = cfg!(feature = "smart");
+
+/// One status for a pack's two downloads: a failure or a download in progress shows first,
+/// and the progress counts both files by size.
+pub fn combined_status(speech: &ModelStatus, writer: &ModelStatus, pack: Pack) -> ModelStatus {
+    let writer = if WRITER { writer } else { &ModelStatus::Ready };
+    for status in [speech, writer] {
+        if let ModelStatus::Failed { message } = status {
+            return ModelStatus::Failed { message: message.clone() };
+        }
+    }
+    let done = |status: &ModelStatus| match status {
+        ModelStatus::Downloading { fraction } => *fraction,
+        ModelStatus::Ready | ModelStatus::Loading => 1.0,
+        _ => 0.0,
+    };
+    if matches!(speech, ModelStatus::Downloading { .. }) || matches!(writer, ModelStatus::Downloading { .. }) {
+        let (a, b) = (pack.speech().component().bytes as f64, pack.writer().component().bytes as f64);
+        return ModelStatus::Downloading { fraction: (done(speech) * a + done(writer) * b) / (a + b) };
+    }
+    if matches!(speech, ModelStatus::Missing) || matches!(writer, ModelStatus::Missing) {
+        return ModelStatus::Missing;
+    }
+    if matches!(speech, ModelStatus::Loading) || matches!(writer, ModelStatus::Loading) {
+        return ModelStatus::Loading;
+    }
+    ModelStatus::Ready
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_pack_downloads_as_one() {
+        use ModelStatus::*;
+        let pack = Pack::Basic;
+        // Speech done, writer halfway: well past half, as the speech model is the bigger file.
+        let Downloading { fraction } = combined_status(&Ready, &Downloading { fraction: 0.5 }, pack) else { panic!() };
+        assert!(fraction > 0.75 && fraction < 0.9, "{fraction}");
+        assert_eq!(combined_status(&Ready, &Ready, pack), Ready);
+        assert_eq!(combined_status(&Loading, &Ready, pack), Loading);
+        let failed = Failed { message: "x".into() };
+        assert_eq!(combined_status(&Ready, &failed, pack), if WRITER { failed.clone() } else { Ready });
+        assert_eq!(combined_status(&Missing, &Missing, pack), Missing);
     }
 }
