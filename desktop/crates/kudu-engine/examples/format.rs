@@ -1,6 +1,9 @@
 //! Tries smart formatting and Command mode with a downloaded GGUF model.
 //!
-//! cargo run --release -p kudu-engine --features smart --example format -- model.gguf
+//! cargo run --release -p kudu-engine --features smart --example format -- model.gguf [short|long]
+//!
+//! `short` uses the brief formatting prompt Kudu's writers were trained on (the default);
+//! `long` uses the full instructions general-purpose models need.
 
 use std::time::Instant;
 
@@ -9,7 +12,8 @@ use kudu_engine::smart::{FormatRequest, SmartFormatter};
 
 fn main() -> anyhow::Result<()> {
     let path = std::env::args().nth(1).expect("path to a .gguf model");
-    let formatter = SmartFormatter::load(path.as_ref())?;
+    let short = std::env::args().nth(2).as_deref() != Some("long");
+    let formatter = SmartFormatter::load(path.as_ref(), short)?;
     let cases: [(&str, AppCategory, Option<&str>); 6] = [
         ("quick update three things first design is done second backend is waiting on auth third should be ready tomorrow", AppCategory::General, Some("Notepad")),
         ("So for the launch next week we need three things first the landing page needs a final review second the pricing table has to be updated with the new plans and third we have to send the announcement email to everyone on the waitlist", AppCategory::General, None),

@@ -5,6 +5,7 @@
 pub mod asr;
 pub mod audio;
 pub mod models;
+pub mod prompts;
 pub mod resample;
 pub mod segmenter;
 pub mod sounds;
@@ -16,4 +17,4 @@ pub mod smart;
 
 pub use asr::SpeechEngine;
 pub use audio::{Recorder, SAMPLE_RATE};
-pub use models::{SmartModel, SpeechModel};
+pub use models::{Pack, SpeechModel, WriterModel};

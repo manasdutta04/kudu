@@ -1,0 +1,100 @@
+{
+  "version": 1,
+  "packs": [
+    {
+      "id": "kudu-tiny",
+      "speech": "kudu-speech-tiny",
+      "writer": "kudu-writer-tiny"
+    },
+    {
+      "id": "kudu-basic",
+      "speech": "kudu-speech-base",
+      "writer": "kudu-writer-tiny",
+      "default": true
+    },
+    {
+      "id": "kudu-large",
+      "speech": "kudu-speech-base",
+      "writer": "kudu-writer-base"
+    }
+  ],
+  "components": {
+    "kudu-speech-base": {
+      "version": "1.0.0",
+      "kind": "speech",
+      "format": "sherpa-onnx-int8",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8.tar.bz2",
+      "archive": "tar.bz2",
+      "sha256": "157c157bc51155e03e37d2466522a3a737dd9c72bb25f36eb18912964161e1ad",
+      "bytes": 482468385,
+      "disk_mb": 631,
+      "files": [
+        "encoder.int8.onnx",
+        "decoder.int8.onnx",
+        "joiner.int8.onnx",
+        "tokens.txt"
+      ],
+      "license": "CC-BY-4.0",
+      "model": "NVIDIA Parakeet TDT 0.6B v2",
+      "min_app_version": "0.1.3",
+      "macos": {
+        "format": "coreml",
+        "repo": "https://huggingface.co/FluidInference/parakeet-tdt-0.6b-v2-coreml",
+        "revision": "ee09c569f73759e6d44c9bd16766f477b2b36d39",
+        "via": "FluidAudio 0.17.7 (downloads the model itself)"
+      }
+    },
+    "kudu-speech-tiny": {
+      "version": "1.0.0",
+      "kind": "speech",
+      "format": "sherpa-onnx-int8",
+      "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-moonshine-base-en-int8.tar.bz2",
+      "archive": "tar.bz2",
+      "sha256": "21870cecaa2e44e4e2bf63e02d1072bed183ccd10284871353bd9d24dad14e5e",
+      "bytes": 250807309,
+      "disk_mb": 272,
+      "files": [
+        "preprocess.onnx",
+        "encode.int8.onnx",
+        "uncached_decode.int8.onnx",
+        "cached_decode.int8.onnx",
+        "tokens.txt"
+      ],
+      "license": "MIT",
+      "model": "Moonshine Base (English)",
+      "min_app_version": "0.1.3"
+    },
+    "kudu-writer-tiny": {
+      "version": "1.0.0",
+      "kind": "writer",
+      "format": "gguf",
+      "url": "https://huggingface.co/manasdutta04/kudu-writer-tiny/resolve/main/kudu-writer-tiny-v1-iq4_xs.gguf",
+      "sha256": "80f9679bdf3de5f512b834357ee646af63050a3f03356120ff30cc974e10c56d",
+      "bytes": 226661280,
+      "license": "Apache-2.0",
+      "base": "HuggingFaceTB/SmolLM2-360M-Instruct",
+      "chat_template": "chatml",
+      "prompts": [
+        "v1",
+        "v2"
+      ],
+      "min_app_version": "0.1.3"
+    },
+    "kudu-writer-base": {
+      "version": "1.0.0",
+      "kind": "writer",
+      "format": "gguf",
+      "url": "https://huggingface.co/manasdutta04/kudu-writer-base/resolve/main/kudu-writer-base-v1-q4_0.gguf",
+      "sha256": "3f775d8090edcdfb05d0fbd02bf8b182b7ba44cdc5089b342c8457fcad0a1f22",
+      "bytes": 352972160,
+      "license": "Apache-2.0",
+      "base": "Qwen/Qwen2.5-0.5B-Instruct",
+      "chat_template": "chatml",
+      "prompts": [
+        "v1",
+        "v2"
+      ],
+      "min_app_version": "0.1.3"
+    }
+  }
+}

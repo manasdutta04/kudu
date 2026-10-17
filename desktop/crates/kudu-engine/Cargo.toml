@@ -20,6 +20,7 @@ serde.workspace = true
 serde_json.workspace = true
 parking_lot.workspace = true
 crossbeam-channel.workspace = true
+sha2.workspace = true
 cpal = "0.18"
 sherpa-onnx = "1.13.8"
 # The OS's own TLS (SChannel on Windows, OpenSSL on Linux): smaller, no bundled crypto to build.
