@@ -552,6 +552,22 @@ struct SettingsPage: View {
                 }
             }
 
+            Section(
+                title: "Speech model",
+                footer: "Runs on this Mac's Neural Engine and works offline. Formatting and Command mode use Apple Intelligence, so there's nothing else to download."
+            ) {
+                ForEach(SpeechModel.allCases) { model in
+                    Row(title: model.name, detail: "\(model.summary) About \(model.downloadMB) MB.") {
+                        modelControl(model)
+                    }
+                }
+                Row(title: "Remove the model you're not using", detail: "Frees its space. You can download it again any time.", divider: false) {
+                    Button("Remove") { controller.removeUnusedModels() }
+                        .buttonStyle(QuietButtonStyle(destructive: true))
+                        .disabled(!SpeechModel.allCases.contains { $0 != controller.speechModel && $0.isDownloaded })
+                }
+            }
+
             Section(title: "Command mode") {
                 Row(
                     title: "Select text, hold \(controller.shortcuts.command?.displayName ?? "the Command shortcut") and say what to do",
@@ -601,10 +617,15 @@ struct SettingsPage: View {
                         .foregroundStyle(.secondary)
                 }
                 Row(title: "Speech model") {
-                    Text("kudu-speech-base · NVIDIA Parakeet TDT 0.6B v2, on device").foregroundStyle(.secondary)
+                    Text("\(controller.speechModel.name), on device").foregroundStyle(.secondary)
                 }
-                Row(title: "Formatting & commands", divider: false) {
+                Row(title: "Formatting & commands") {
                     Text(controller.smartFormattingAvailable ? "Apple Intelligence, on device" : "Rules only").foregroundStyle(.secondary)
+                }
+                UpdateSettingsRows(updates: controller.updates)
+                Row(title: "Open-source credits", detail: "The open models and libraries Kudu is built on, and their licenses.", divider: false) {
+                    Link("View", destination: URL(string: "https://github.com/manasdutta04/kudu#credits")!)
+                        .font(.callout)
                 }
             }
         }
@@ -612,6 +633,62 @@ struct SettingsPage: View {
             Button("Clear history", role: .destructive) { history.clear() }
         } message: {
             Text("This deletes every saved dictation from this Mac. It can't be undone.")
+        }
+    }
+}
+
+/// Settings → About: automatic update checks, the last result and "Check now".
+private struct UpdateSettingsRows: View {
+    @ObservedObject var updates: UpdateChecker
+
+    var body: some View {
+        Row(title: "Check for updates automatically", detail: "Once a day, Kudu asks GitHub which version is the latest. Nothing about you is sent.") {
+            AccentSwitch(isOn: $updates.automatic)
+        }
+        Row(title: "Updates", detail: status) {
+            switch updates.state {
+            case .available:
+                Button("Install update") { updates.install() }.buttonStyle(QuietButtonStyle(prominent: true))
+            case .checking, .installing:
+                ProgressView().controlSize(.small)
+            default:
+                Button("Check now") { Task { await updates.check() } }.buttonStyle(QuietButtonStyle())
+            }
+        }
+    }
+
+    private var status: String {
+        switch updates.state {
+        case .idle: "You're on \(updates.current)."
+        case .checking: "Checking…"
+        case .upToDate: "You're on \(updates.current), the latest version."
+        case .available(let version): "Kudu \(version) is available. You're on \(updates.current), an older version."
+        case .installing: "Installing… Kudu will quit and reopen."
+        case .failed(let message): "\(message). You're on \(updates.current)."
+        }
+    }
+}
+
+extension SettingsPage {
+    /// The control for one speech model: in use, a download in progress, or a button.
+    @ViewBuilder func modelControl(_ model: SpeechModel) -> some View {
+        let current = model == controller.speechModel
+        switch (current, controller.modelState) {
+        case (true, .downloading(let fraction)):
+            HStack(spacing: 8) {
+                Text("\(Int(fraction * 100))%").font(.caption).foregroundStyle(.secondary).monospacedDigit()
+                ProgressView(value: fraction).tint(Theme.accent).frame(width: 110)
+            }
+        case (true, .loading):
+            Text("Loading…").font(.caption).foregroundStyle(.secondary)
+        case (true, .ready):
+            Label("In use", systemImage: "checkmark").font(.caption.weight(.semibold)).foregroundStyle(.green)
+        case (true, _):
+            Button("Download") { Task { await controller.chooseModel(model) } }.buttonStyle(QuietButtonStyle(prominent: true))
+        case (false, _):
+            Button(model.isDownloaded ? "Use" : "Download") { Task { await controller.chooseModel(model) } }
+                .buttonStyle(QuietButtonStyle())
+                .disabled({ if case .downloading = controller.modelState { return true }; return false }())
         }
     }
 }
