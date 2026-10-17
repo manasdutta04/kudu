@@ -62,7 +62,15 @@
       ],
       "license": "MIT",
       "model": "Moonshine Base (English)",
-      "min_app_version": "0.1.3"
+      "min_app_version": "0.1.3",
+      "macos": {
+        "format": "coreml",
+        "model": "NVIDIA Parakeet TDT-CTC 110M (English)",
+        "license": "CC-BY-4.0",
+        "repo": "https://huggingface.co/FluidInference/parakeet-tdt-ctc-110m-coreml",
+        "revision": "9bc92ead6e8f17eca92a869fd578ae76842b82ba",
+        "via": "FluidAudio 0.17.7 (downloads the model itself)"
+      }
     },
     "kudu-writer-tiny": {
       "version": "1.0.0",
