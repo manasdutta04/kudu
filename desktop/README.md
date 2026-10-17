@@ -14,9 +14,9 @@ checked against their sha256 checksums.
 
 | Pack | Speech | Writer | Download | On disk |
 |---|---|---|---|---|
-| kudu-tiny | kudu-speech-tiny (Moonshine Base) | kudu-writer-tiny | 0.48 GB | 0.50 GB |
-| **kudu-basic** (default) | kudu-speech-base (Parakeet TDT 0.6B v2) | kudu-writer-tiny | 0.71 GB | 0.86 GB |
-| kudu-large | kudu-speech-base (Parakeet TDT 0.6B v2) | kudu-writer-base | 0.84 GB | 0.98 GB |
+| Kudu Tiny | kudu-speech-tiny (Moonshine Base) | kudu-writer-tiny | 0.48 GB | 0.50 GB |
+| **Kudu Base** (default) | kudu-speech-base (Parakeet TDT 0.6B v2) | kudu-writer-tiny | 0.71 GB | 0.86 GB |
+| Kudu Large | kudu-speech-base (Parakeet TDT 0.6B v2) | kudu-writer-base | 0.84 GB | 0.98 GB |
 
 The writer is Kudu's own small model, fine-tuned to format dictation (lists, numbers, email
 layout, code) and to run Command mode, without changing your words. Speech files come from the

@@ -8,7 +8,7 @@ cloud, no telemetry.
 |---|---|
 | ⚡ **Fast** | Text lands ~100–700 ms after you release the key, even for long, formatted dictations: Kudu formats while you speak (Apple M4) |
 | 🔒 **Private** | Audio never leaves your computer |
-| 🪶 **Light** | ~14 MB app. Mac: one speech model (~450 MB), formatting by Apple Intelligence. Windows and Linux: one model pack (0.48–0.84 GB). Downloaded once, then offline |
+| 🪶 **Light** | ~14 MB app. Mac: Kudu Tiny (~230 MB) or Kudu Base (~450 MB) for speech, formatting by Apple Intelligence. Windows and Linux: one model pack (0.48–0.84 GB). Downloaded once, then offline |
 | 🧩 **Native** | A native app per platform, not a web wrapper |
 
 ## Install
@@ -80,7 +80,7 @@ See the [roadmap](docs/ROADMAP.md) for what's next.
 ## The AI inside (all on your computer)
 | Job | Mac | Windows and Linux |
 |---|---|---|
-| Speech → text | **kudu-speech-base** (NVIDIA Parakeet TDT 0.6B v2) on the Apple Neural Engine, through FluidAudio | **kudu-speech-base** or **kudu-speech-tiny** (Moonshine Base) on the CPU, through sherpa-onnx |
+| Speech → text | **Kudu Tiny** (~230 MB) or **Kudu Base** (~450 MB) on the Apple Neural Engine, through FluidAudio | **kudu-speech-base** or **kudu-speech-tiny** (Moonshine Base) on the CPU, through sherpa-onnx |
 | Formatting and Command mode | Apple Intelligence (Apple's on-device Foundation Models, macOS 26+); nothing extra to download | **kudu-writer-tiny** or **kudu-writer-base**, Kudu's own writer models, through llama.cpp |
 | Cleanup, styles, dictionary, learning | Fast deterministic rules | The same rules, in Rust |
 
@@ -88,9 +88,9 @@ On Windows and Linux you pick one **model pack** at setup; speech and writer dow
 
 | Pack | Speech | Writer | Download | On disk |
 |---|---|---|---|---|
-| kudu-tiny | kudu-speech-tiny | kudu-writer-tiny | 0.48 GB | 0.50 GB |
-| **kudu-basic** (default) | kudu-speech-base | kudu-writer-tiny | 0.71 GB | 0.86 GB |
-| kudu-large | kudu-speech-base | kudu-writer-base | 0.84 GB | 0.98 GB |
+| Kudu Tiny | kudu-speech-tiny | kudu-writer-tiny | 0.48 GB | 0.50 GB |
+| **Kudu Base** (default) | kudu-speech-base | kudu-writer-tiny | 0.71 GB | 0.86 GB |
+| Kudu Large | kudu-speech-base | kudu-writer-base | 0.84 GB | 0.98 GB |
 
 The writers are small models fine-tuned for one job: formatting dictation without changing your
 words. On Kudu's dictation test set they keep about 98% of their replies through the app's
@@ -119,7 +119,8 @@ See [macos/README.md](macos/README.md) for requirements, signing, tests and benc
 | [`CHANGELOG.md`](CHANGELOG.md) | Release notes |
 
 ## Credits
-- [NVIDIA Parakeet TDT 0.6B v2](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2) (kudu-speech-base): CC-BY-4.0, by NVIDIA. On the Mac, FluidInference's Core ML conversion; on Windows and Linux, the sherpa-onnx int8 export.
+- [NVIDIA Parakeet TDT 0.6B v2](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2) (kudu-speech-base; Kudu Base on the Mac): CC-BY-4.0, by NVIDIA.
+- [NVIDIA Parakeet TDT-CTC 110M](https://huggingface.co/nvidia/parakeet-tdt_ctc-110m) (Kudu Tiny on the Mac): CC-BY-4.0, by NVIDIA, through FluidInference's Core ML conversion. On the Mac, FluidInference's Core ML conversion; on Windows and Linux, the sherpa-onnx int8 export.
 - [Moonshine Base](https://huggingface.co/moonshine-ai/moonshine-base) (kudu-speech-tiny): MIT, by Useful Sensors / Moonshine AI.
 - [kudu-writer-tiny](https://huggingface.co/manasdutta04/kudu-writer-tiny), fine-tuned from [SmolLM2-360M-Instruct](https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct), and [kudu-writer-base](https://huggingface.co/manasdutta04/kudu-writer-base), fine-tuned from [Qwen2.5-0.5B-Instruct](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct): Apache-2.0.
 - [FluidAudio](https://github.com/FluidInference/FluidAudio), [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx): Apache-2.0. [llama.cpp](https://github.com/ggml-org/llama.cpp): MIT.

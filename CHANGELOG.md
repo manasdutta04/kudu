@@ -3,6 +3,30 @@
 All notable changes to Kudu are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com) and the project uses [Semantic Versioning](https://semver.org).
 
+## [0.1.4] - 2026-10-17
+### Added
+- **Updates from inside Kudu.**
+  - Once a day Kudu checks GitHub for a newer version. When there is one, Home shows "Kudu
+    0.1.x is available. You're on an older version" with an **Install update** button.
+  - On a Mac and on Windows, one click downloads and installs it, and Kudu reopens. On Linux the
+    button opens the download page.
+  - Settings → About has "Check now" and a switch to turn the daily check off. The check sends
+    nothing about you.
+- **Mac: choose your speech model.** **Kudu Tiny** (about 230 MB, smaller and faster) or **Kudu
+  Base** (about 450 MB, the most accurate, recommended). Pick one at setup or in Settings →
+  Speech model; switch any time, and remove the one you don't use. Formatting still uses Apple
+  Intelligence, with nothing else to download.
+
+### Changed
+- **A clearer setup card on the Mac:**
+  - a progress bar for the three steps;
+  - an icon and a "Done" mark on each step;
+  - model choices as cards with their sizes;
+  - a download that shows its percentage and megabytes.
+- **Kudu's own names in the app:** Kudu Tiny, Kudu Base and Kudu Large on Windows and Linux (the
+  middle pack was "kudu-basic"; saved settings carry over), Kudu Tiny and Kudu Base on a Mac.
+  The open models they're built on are credited under Settings → About → Open-source credits.
+
 ## [0.1.3] - 2026-10-17
 ### Added
 - **Kudu's own models (Windows and Linux).** Setup now offers one **model pack**, a speech model
@@ -10,9 +34,9 @@ All notable changes to Kudu are listed here. The format follows
 
   | Pack | Contents | Download | On disk |
   |---|---|---|---|
-  | kudu-tiny | kudu-speech-tiny + kudu-writer-tiny | 0.48 GB | 0.50 GB |
-  | **kudu-basic** (default) | kudu-speech-base + kudu-writer-tiny | 0.71 GB | 0.86 GB |
-  | kudu-large | kudu-speech-base + kudu-writer-base | 0.84 GB | 0.98 GB |
+  | Kudu Tiny | kudu-speech-tiny + kudu-writer-tiny | 0.48 GB | 0.50 GB |
+  | **Kudu Base** (default) | kudu-speech-base + kudu-writer-tiny | 0.71 GB | 0.86 GB |
+  | Kudu Large | kudu-speech-base + kudu-writer-base | 0.84 GB | 0.98 GB |
 
   - The writers are small models fine-tuned for formatting dictation and Command mode
     (kudu-writer-tiny from SmolLM2-360M, kudu-writer-base from Qwen2.5-0.5B; both Apache-2.0).

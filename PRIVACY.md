@@ -31,11 +31,16 @@ Kudu is built so that what you say stays on your Mac.
 - **Settings, dictionary and snippets** are saved as JSON files in the same folder.
 
 ## Network access
-Kudu connects to the internet once, to download its models on first launch: on a Mac the
-speech model (formatting uses Apple Intelligence, already on your Mac); on Windows and Linux
-the model pack you choose (a speech model from the sherpa-onnx releases on GitHub and a writer
-model from Hugging Face, each checked against its published checksum). After that it works
-fully offline. There is no account, no analytics, no telemetry and no crash
+Kudu connects to the internet for two things:
+- **Models, once:** on first launch it downloads the models you choose: on a Mac, the speech
+  model (Kudu Tiny or Kudu Base; formatting uses Apple Intelligence, already on your Mac); on
+  Windows and Linux, the model pack (a speech model from the sherpa-onnx releases on GitHub and a
+  writer model from Hugging Face, each checked against its published checksum).
+- **An update check, once a day:** Kudu asks GitHub which version is the latest release. The
+  request carries nothing about you or your dictations. Switch it off in Settings → About;
+  updates are installed only when you click Install.
+
+Dictation itself works fully offline. There is no account, no analytics, no telemetry and no crash
 reporting.
 
 ## Windows and Linux
