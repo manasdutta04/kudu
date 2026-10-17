@@ -13,7 +13,7 @@ curl -fsSL https://github.com/manasdutta04/kudu/releases/latest/download/install
 Or by hand: download **Kudu-macOS.dmg** (or the .zip), drag **Kudu** into **Applications**, then run this once in Terminal so macOS lets the unsigned app open:
 
 ```bash
-xattr -cr /Applications/Kudu.app
+chmod -R u+w /Applications/Kudu.app && xattr -cr /Applications/Kudu.app
 ```
 
 On first launch, allow **Microphone** and **Accessibility** when Kudu asks. Hold **fn** to dictate.

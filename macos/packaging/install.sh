@@ -39,7 +39,9 @@ if pgrep -x Kudu >/dev/null; then
 fi
 rm -rf "$APP"
 mv "$tmp/Kudu.app" "$APP"
-# Unsigned app: clear the quarantine flag so macOS lets it open.
+# Unsigned app: clear the quarantine flag so macOS lets it open (read-only files inside
+# would keep it, so make them writable first).
+chmod -R u+w "$APP"
 xattr -cr "$APP"
 
 echo "Kudu is installed in /Applications."

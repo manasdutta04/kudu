@@ -30,6 +30,9 @@ cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
 # SwiftPM resource bundles from dependencies (unused by the ASR path, but keep them so
 # Bundle.module lookups never crash).
 find "$BIN_DIR" -maxdepth 1 -name '*.bundle' -exec cp -R {} "$APP/Contents/Resources/" \;
+# Some of those files arrive read-only, and then `xattr -cr` can't clear the quarantine flag
+# from them after a download. Make everything in the app writable by its owner.
+chmod -R u+w "$APP"
 
 codesign --force --options runtime --timestamp=none \
   --entitlements Sources/Kudu/Kudu.entitlements \

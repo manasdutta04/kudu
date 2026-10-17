@@ -23,7 +23,7 @@ curl -fsSL https://github.com/manasdutta04/kudu/releases/latest/download/install
 ```
 Installed by hand (dragged from the .dmg)? Run this once so macOS opens the unsigned app:
 ```bash
-xattr -cr /Applications/Kudu.app
+chmod -R u+w /Applications/Kudu.app && xattr -cr /Applications/Kudu.app
 ```
 
 **Windows 10/11** (beta), in PowerShell
