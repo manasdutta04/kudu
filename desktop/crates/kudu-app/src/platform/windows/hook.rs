@@ -162,7 +162,9 @@ struct State {
     recorder: Option<Recorder>,
     /// Physical modifiers held, one bit per entry of `MODIFIER_KEYS`.
     held: u8,
-    /// Modifiers whose press was hidden from the system (while recording).
+    /// Modifiers whose press was hidden from the system: while recording, or because the press
+    /// started one of Kudu's shortcuts (so Alt alone doesn't reach an app's menu bar, or Win
+    /// the Start menu). Their releases are hidden too, unless they were replayed.
     swallowed_modifiers: u8,
     /// Win/Alt keys pressed with no other key since: releasing one now would open the Start
     /// menu or the menu bar.
@@ -308,13 +310,29 @@ impl State {
             return swallow;
         }
 
-        // Modifiers always reach the system, so its idea of what's held stays right; only a
-        // release whose press was hidden while recording is hidden too.
-        let swallow = up && self.swallowed_modifiers & mask != 0;
-        self.swallowed_modifiers &= !mask;
+        // Modifiers reach the system, unless their press starts one of Kudu's shortcuts: then
+        // the shortcut belongs to Kudu alone, and the press (and later its release) is hidden.
+        // A release is hidden exactly when its press was.
+        let mut swallow = up && self.swallowed_modifiers & mask != 0;
+        if up {
+            self.swallowed_modifiers &= !mask;
+        }
         if changed {
             let (list, count) = self.held_modifiers();
             if let Some((events, holding)) = self.match_with(|m| m.modifiers_changed(&list[..count], now)) {
+                let starts = events.iter().any(|e| matches!(e, HotkeyEvent::Pressed | HotkeyEvent::CommandPressed));
+                if !up && starts && holding {
+                    swallow = true;
+                    self.swallowed_modifiers |= mask;
+                    // The system never sees this press, so there's no menu to stop on release.
+                    self.unmasked &= !mask;
+                } else if !up && events.contains(&HotkeyEvent::Cancelled) && self.swallowed_modifiers != 0 {
+                    // Another modifier joined: it's the user's own shortcut (Alt + Shift…).
+                    // Give the system the hidden presses first, then this one.
+                    input::replay_hidden(self.swallowed_modifiers, input::Then::Modifier(bit));
+                    self.swallowed_modifiers = 0;
+                    swallow = true;
+                }
                 self.after_match(&events, holding);
             }
         }
@@ -365,6 +383,14 @@ impl State {
         if !swallow {
             // The system saw a key while Win/Alt were down: their release won't open a menu.
             self.unmasked = 0;
+            if !up && self.swallowed_modifiers != 0 {
+                // A key pressed while a hidden shortcut key is held (Alt + Tab, Win + E…): the
+                // user's own shortcut, and Kudu has let go of its hold. Give the system the
+                // hidden presses, then this key; its release passes as usual.
+                input::replay_hidden(self.swallowed_modifiers, input::Then::Key { vk, scan, extended });
+                self.swallowed_modifiers = 0;
+                return true;
+            }
         }
         swallow
     }

@@ -3,6 +3,16 @@
 All notable changes to Kudu are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com) and the project uses [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+### Fixed
+- **Windows: a shortcut key now belongs to Kudu while you use it.**
+  - When a press of Alt, Win or another modifier starts a Kudu shortcut, Windows and the app
+    you're in never see that key. Holding Alt to dictate no longer shows or focuses an app's
+    menu bar (VS Code, Office…), and Win no longer opens the Start menu.
+  - If you press another key while holding it (Alt + Tab, Alt + Shift…), Kudu lets go of the
+    dictation and hands the keys to Windows in the order you pressed them, so your own
+    shortcuts still work.
+
 ## [0.1.3] - 2026-10-17
 ### Added
 - **Kudu's own models (Windows and Linux).** Setup now offers one **model pack**, a speech model

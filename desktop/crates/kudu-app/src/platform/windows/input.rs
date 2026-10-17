@@ -66,6 +66,38 @@ fn scan_code(vk: u16, layout: HKL) -> u16 {
     unsafe { MapVirtualKeyExW(vk as u32, MAPVK_VK_TO_VSC, Some(layout)) as u16 }
 }
 
+/// What follows hidden modifier presses in [`replay_hidden`]: the key that showed they belong
+/// to one of the user's own shortcuts.
+pub enum Then {
+    /// Another modifier (bit as in `MODIFIER_KEYS`) went down.
+    Modifier(usize),
+    /// A regular key went down.
+    Key { vk: u32, scan: u32, extended: bool },
+}
+
+/// Presses, for the system, modifiers whose presses Kudu hid (they started one of Kudu's
+/// shortcuts), followed by the key that turned out to make them the user's own shortcut
+/// (Alt + Tab, Alt + Shift…), in the order they were pressed. Their physical releases then
+/// reach the system as usual.
+pub fn replay_hidden(hidden: u8, then: Then) {
+    let layout = foreground_layout();
+    let modifier = |bit: usize, flags: KEYBD_EVENT_FLAGS| {
+        let vk = MODIFIER_KEYS[bit].0 as u16;
+        let flags = if EXTENDED_MODIFIER_BITS & (1 << bit) != 0 { flags | KEYEVENTF_EXTENDEDKEY } else { flags };
+        key(vk, scan_code(vk, layout), flags)
+    };
+    let mut inputs: Vec<INPUT> =
+        (0..MODIFIER_KEYS.len()).filter(|bit| hidden & (1 << bit) != 0).map(|bit| modifier(bit, KEYBD_EVENT_FLAGS(0))).collect();
+    inputs.push(match then {
+        Then::Modifier(bit) => modifier(bit, KEYBD_EVENT_FLAGS(0)),
+        Then::Key { vk, scan, extended } => {
+            let flags = if extended { KEYEVENTF_EXTENDEDKEY } else { KEYBD_EVENT_FLAGS(0) };
+            key(vk as u16, scan as u16, flags)
+        }
+    });
+    send(&inputs);
+}
+
 /// Presses and releases the mask key (see [`VK_MASK`]).
 pub fn send_mask_key() {
     send(&[key(VK_MASK, 0, KEYBD_EVENT_FLAGS(0)), key(VK_MASK, 0, KEYEVENTF_KEYUP)]);
