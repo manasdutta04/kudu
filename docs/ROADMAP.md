@@ -50,8 +50,8 @@
 
 ## Windows and Linux (Rust, `desktop/`)
 - [x] Shared core: the same text pipeline, shortcuts and learning as the Mac app
-- [x] Speech on the CPU (Parakeet or Moonshine via sherpa-onnx), transcribed at pauses while you speak
-- [x] Optional small language model (Qwen2.5 0.5B / 1.5B via llama.cpp) for smart formatting and Command mode
+- [x] Speech on the CPU (kudu-speech-base / kudu-speech-tiny via sherpa-onnx), transcribed at pauses while you speak
+- [x] Kudu's own writer models (kudu-writer-tiny / kudu-writer-base via llama.cpp) for formatting and Command mode, in one model pack with the speech model
 - [x] Windows: keyboard hook, clipboard paste that stays out of clipboard history, UI Automation, overlay, tray
 - [x] Linux: evdev + uinput (X11 and Wayland), AT-SPI, layer-shell / X11 overlay, tray
 - [x] Settings window: Home, Insights, Dictionary, Snippets, Style, Settings

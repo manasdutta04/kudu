@@ -3,6 +3,48 @@
 All notable changes to Kudu are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com) and the project uses [Semantic Versioning](https://semver.org).
 
+## [0.1.3] - 2026-10-17
+### Added
+- **Kudu's own models (Windows and Linux).** Setup now offers one **model pack**, a speech model
+  plus a writer model downloaded together:
+
+  | Pack | Contents | Download | On disk |
+  |---|---|---|---|
+  | kudu-tiny | kudu-speech-tiny + kudu-writer-tiny | 0.48 GB | 0.50 GB |
+  | **kudu-basic** (default) | kudu-speech-base + kudu-writer-tiny | 0.71 GB | 0.86 GB |
+  | kudu-large | kudu-speech-base + kudu-writer-base | 0.84 GB | 0.98 GB |
+
+  - The writers are small models fine-tuned for formatting dictation and Command mode
+    (kudu-writer-tiny from SmolLM2-360M, kudu-writer-base from Qwen2.5-0.5B; both Apache-2.0).
+  - On Kudu's test set they keep ~98% of their replies through the app's safety check (80% for
+    the general-purpose model they replace), with ~70% exact matches (10% before).
+  - They format a 50-word dictation in about 1 second on a laptop CPU (2.75 s before).
+- **Checksums:** every model download is verified against its published sha256, and a damaged
+  download is deleted instead of used.
+- **Settings → Models:** switch packs, see what's inside with credits, and remove models you no
+  longer use.
+- A developer tool that prints exactly what the writer receives for a dictation
+  (`writer_prompt` example).
+
+### Changed
+- **Formatting is now part of every pack on Windows and Linux.** It's no longer an optional
+  download, and it uses a short prompt the writers were trained on, so it answers sooner.
+- **The optional Qwen2.5 "Small" / "Better" downloads are gone.** Existing settings move to the
+  matching pack, the old files are deleted, and the writer downloads by itself after the update.
+- **macOS:** unchanged. Formatting and Command mode use Apple Intelligence (macOS 26), with
+  nothing extra to download. The speech model is now named kudu-speech-base.
+
+### Fixed
+- **Lists:** spoken numbered and bulleted lists ("number one…", "step one…", "bullet…") are
+  accepted.
+- **Numbers:** spoken numbers with several parts ("one thousand two hundred and fifty dollars"
+  → $1,250) are accepted, and so is "π" in math.
+- **Routing:** unit plurals (kilograms, litres, kilometers), spoken dates ("the twelfth of
+  March") and counts ("forty five people") now reach the writer.
+- **To-do items:** a single to-do item may drop its spoken "add".
+- **Command mode:** asking for an apology no longer looks like a refusal.
+- **Code:** a stray backtick or unpaired quote in formatted code is rejected.
+
 ## [0.1.2] - 2026-10-15
 ### Added
 - **More ways to install:** a Windows installer (`Kudu-Windows-x64-Setup.exe`: per-user, Start

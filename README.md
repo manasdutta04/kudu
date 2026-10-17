@@ -8,7 +8,7 @@ cloud, no telemetry.
 |---|---|
 | ⚡ **Fast** | Text lands ~100–700 ms after you release the key, even for long, formatted dictations: Kudu formats while you speak (Apple M4) |
 | 🔒 **Private** | Audio never leaves your computer |
-| 🪶 **Light** | ~14 MB app; the speech model (~450 MB) downloads once, then works offline |
+| 🪶 **Light** | ~14 MB app. Mac: one speech model (~450 MB), formatting by Apple Intelligence. Windows and Linux: one model pack (0.48–0.84 GB). Downloaded once, then offline |
 | 🧩 **Native** | A native app per platform, not a web wrapper |
 
 ## Install
@@ -77,16 +77,30 @@ It asks for `sudo` once to let Kudu read the keyboard and type; log out and back
 
 See the [roadmap](docs/ROADMAP.md) for what's next.
 
-## The AI inside (all on your Mac)
-| Job | What runs it |
-|---|---|
-| Speech → text | NVIDIA **Parakeet TDT 0.6B v2** on the Apple Neural Engine, through FluidAudio |
-| Formatting and Command mode | Apple's on-device **Foundation Models** (the ~3B model behind Apple Intelligence, macOS 26+) |
-| Cleanup, styles, dictionary, learning | Fast deterministic rules, written in Swift |
-| Names and terms on screen | Accessibility + the system spell checker, to spell what you said the way it appears |
+## The AI inside (all on your computer)
+| Job | Mac | Windows and Linux |
+|---|---|---|
+| Speech → text | **kudu-speech-base** (NVIDIA Parakeet TDT 0.6B v2) on the Apple Neural Engine, through FluidAudio | **kudu-speech-base** or **kudu-speech-tiny** (Moonshine Base) on the CPU, through sherpa-onnx |
+| Formatting and Command mode | Apple Intelligence (Apple's on-device Foundation Models, macOS 26+); nothing extra to download | **kudu-writer-tiny** or **kudu-writer-base**, Kudu's own writer models, through llama.cpp |
+| Cleanup, styles, dictionary, learning | Fast deterministic rules | The same rules, in Rust |
 
-There are no servers, no accounts and no API keys. After the one-time model download, Kudu
-works offline.
+On Windows and Linux you pick one **model pack** at setup; speech and writer download together:
+
+| Pack | Speech | Writer | Download | On disk |
+|---|---|---|---|---|
+| kudu-tiny | kudu-speech-tiny | kudu-writer-tiny | 0.48 GB | 0.50 GB |
+| **kudu-basic** (default) | kudu-speech-base | kudu-writer-tiny | 0.71 GB | 0.86 GB |
+| kudu-large | kudu-speech-base | kudu-writer-base | 0.84 GB | 0.98 GB |
+
+The writers are small models fine-tuned for one job: formatting dictation without changing your
+words. On Kudu's dictation test set they keep about 98% of their replies through the app's
+safety check (a general-purpose model of the same size: 80%) and format a 50-word dictation in
+about a second on a laptop CPU. They're published on Hugging Face:
+[kudu-writer-tiny](https://huggingface.co/manasdutta04/kudu-writer-tiny) and
+[kudu-writer-base](https://huggingface.co/manasdutta04/kudu-writer-base).
+
+There are no servers, no accounts and no API keys. After the one-time download, Kudu works
+offline.
 
 ## Quick start (macOS)
 ```bash
@@ -105,8 +119,10 @@ See [macos/README.md](macos/README.md) for requirements, signing, tests and benc
 | [`CHANGELOG.md`](CHANGELOG.md) | Release notes |
 
 ## Credits
-- [FluidAudio](https://github.com/FluidInference/FluidAudio): Apache-2.0.
-- [NVIDIA Parakeet TDT 0.6B v2](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2): CC-BY-4.0, by NVIDIA. Kudu uses FluidInference's Core ML conversion.
+- [NVIDIA Parakeet TDT 0.6B v2](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2) (kudu-speech-base): CC-BY-4.0, by NVIDIA. On the Mac, FluidInference's Core ML conversion; on Windows and Linux, the sherpa-onnx int8 export.
+- [Moonshine Base](https://huggingface.co/moonshine-ai/moonshine-base) (kudu-speech-tiny): MIT, by Useful Sensors / Moonshine AI.
+- [kudu-writer-tiny](https://huggingface.co/manasdutta04/kudu-writer-tiny), fine-tuned from [SmolLM2-360M-Instruct](https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct), and [kudu-writer-base](https://huggingface.co/manasdutta04/kudu-writer-base), fine-tuned from [Qwen2.5-0.5B-Instruct](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct): Apache-2.0.
+- [FluidAudio](https://github.com/FluidInference/FluidAudio), [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx): Apache-2.0. [llama.cpp](https://github.com/ggml-org/llama.cpp): MIT.
 
 ## License
 MIT. See [LICENSE](LICENSE).

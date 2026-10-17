@@ -8,18 +8,23 @@ app is in [`../macos`](../macos).
 
 ## What you download
 
-| | Size |
-|---|---|
-| Kudu itself | one executable, no installer needed |
-| Speech model, **Accurate** (Parakeet 0.6B, recommended) | 482 MB download, 631 MB on disk |
-| Speech model, **Compact** (Moonshine Base) | 251 MB download, 272 MB on disk |
-| Optional smart formatting, **Small** (Qwen2.5 0.5B) | 491 MB |
-| Optional smart formatting, **Better** (Qwen2.5 1.5B) | 1.1 GB |
+Kudu itself is one small executable (or the installer / `.deb` / `.rpm`). The first time it
+starts you pick a **model pack**: a speech model plus a writer model, downloaded together and
+checked against their sha256 checksums.
 
-Kudu downloads the speech model you choose the first time it starts. Smart formatting (lists,
-numbers, email layout, Command mode) is optional: without it, Kudu still cleans up fillers,
-corrections, spoken punctuation, times, file names, names from your dictionary and more, with
-fast rules.
+| Pack | Speech | Writer | Download | On disk |
+|---|---|---|---|---|
+| kudu-tiny | kudu-speech-tiny (Moonshine Base) | kudu-writer-tiny | 0.48 GB | 0.50 GB |
+| **kudu-basic** (default) | kudu-speech-base (Parakeet TDT 0.6B v2) | kudu-writer-tiny | 0.71 GB | 0.86 GB |
+| kudu-large | kudu-speech-base (Parakeet TDT 0.6B v2) | kudu-writer-base | 0.84 GB | 0.98 GB |
+
+The writer is Kudu's own small model, fine-tuned to format dictation (lists, numbers, email
+layout, code) and to run Command mode, without changing your words. Speech files come from the
+sherpa-onnx releases; the writers from Hugging Face
+([kudu-writer-tiny](https://huggingface.co/manasdutta04/kudu-writer-tiny),
+[kudu-writer-base](https://huggingface.co/manasdutta04/kudu-writer-base)). The catalogue is
+`crates/kudu-engine/src/packs.json`. You can switch packs, and remove the ones you no longer
+use, in Settings → Models.
 
 ## Shortcuts
 
@@ -82,9 +87,10 @@ uses layer-shell on KDE, Hyprland and Sway, and XWayland on GNOME.
 ```
 crates/
   kudu-core/     The text pipeline, shortcuts and learning: pure Rust, the same behaviour as
-                 the Mac app's KuduCore (147 tests).
+                 the Mac app's KuduCore (153 tests).
   kudu-engine/   Microphone capture (cpal), speech recognition (sherpa-onnx, ONNX Runtime on
-                 the CPU), the optional small language model (llama.cpp), model downloads.
+                 the CPU), the writer model (llama.cpp), the model pack catalogue and
+                 checksum-verified downloads.
   kudu-app/      The app: a light background process (shortcuts, microphone, overlay pill,
                  tray) and the settings window (egui), started only when you open it.
     src/platform/windows/   Keyboard hook, clipboard paste, UI Automation, layered overlay
@@ -101,5 +107,7 @@ Try the engine on its own:
 
 ```bash
 cargo run --release -p kudu-engine --no-default-features --example transcribe -- ./models parakeet recording.wav
-cargo run --release -p kudu-engine --example format -- ./models/qwen2.5-1.5b-instruct-q4_k_m.gguf
+cargo run --release -p kudu-engine --example format -- ./models/kudu-writer-tiny-v1-iq4_xs.gguf
+# What the writer would receive for a dictation (rules, routing, exact prompt); no model needed:
+cargo run -p kudu-engine --no-default-features --example writer_prompt -- --app Slack "so um three things first …"
 ```
