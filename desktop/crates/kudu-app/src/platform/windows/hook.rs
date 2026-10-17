@@ -424,7 +424,7 @@ impl State {
         let used = holding
             || events
                 .iter()
-                .any(|e| matches!(e, HotkeyEvent::Pressed | HotkeyEvent::CommandPressed | HotkeyEvent::PasteLast));
+                .any(|e| matches!(e, HotkeyEvent::Pressed | HotkeyEvent::CommandPressed | HotkeyEvent::PasteLast | HotkeyEvent::Meeting));
         if used && self.unmasked != 0 {
             // A Kudu shortcut includes Win or Alt: press the mask key now, while they're still
             // down, so their release doesn't open the Start menu or the menu bar. (Injected
