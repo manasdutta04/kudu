@@ -16,12 +16,12 @@ By taking part you agree to follow our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Ways to contribute
 
-- 🐛 **Report a bug** with the [bug report form](https://github.com/manasdutta04/kudu/issues/new?template=bug_report.yml).
-- ✍️ **Report wrong text** (a misheard word, bad formatting) with the
+- **Report a bug** with the [bug report form](https://github.com/manasdutta04/kudu/issues/new?template=bug_report.yml).
+- **Report wrong text** (a misheard word, bad formatting) with the
   [transcription form](https://github.com/manasdutta04/kudu/issues/new?template=transcription_issue.yml).
-- 💡 **Suggest a feature** with the [feature request form](https://github.com/manasdutta04/kudu/issues/new?template=feature_request.yml).
-- 🧑‍💻 **Send a pull request.** Issues labelled `good first issue` are a great place to start.
-- 🔐 **Security problems** go through [SECURITY.md](SECURITY.md), never a public issue.
+- **Suggest a feature** with the [feature request form](https://github.com/manasdutta04/kudu/issues/new?template=feature_request.yml).
+- **Send a pull request.** Issues labelled `good first issue` are a great place to start.
+- **Security problems** go through [SECURITY.md](SECURITY.md), never a public issue.
 
 ## Getting started
 
