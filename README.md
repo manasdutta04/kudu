@@ -33,7 +33,7 @@ Hold a key, speak, release. Clean, formatted text appears at your cursor, in any
 
 <br />
 
-<img src="public/demo.gif" alt="Kudu demo: dictating into an app and the formatted text appearing at the cursor" width="800" />
+<img src="public/kudu-demo.gif" alt="Kudu demo: dictation in every app" width="800" />
 
 </div>
 
