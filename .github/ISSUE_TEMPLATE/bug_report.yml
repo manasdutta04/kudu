@@ -1,34 +1,87 @@
 name: Bug report
 description: Something didn't work as expected
-labels: [bug]
+title: "[Bug]: "
+labels: [bug, triage]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this! Please search [existing issues](https://github.com/manasdutta04/kudu/issues) first.
+        **Security problems:** please don't file them here. See [SECURITY.md](https://github.com/manasdutta04/kudu/blob/main/SECURITY.md).
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - macOS
+        - Windows
+        - Linux (X11)
+        - Linux (Wayland)
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Kudu version
+      description: Shown in Settings, or on the release you downloaded.
+      placeholder: e.g. 0.1.4
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS version and computer
+      placeholder: e.g. macOS 26.1 on MacBook Air M2 · Windows 11 24H2 · Ubuntu 24.04 GNOME
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Dictation (hold to talk, hands-free)
+        - Text insertion (wrong place, missing text)
+        - Command mode
+        - Meeting notes
+        - Model download or setup
+        - Install or update
+        - Settings, Home or History
+        - Other
+    validations:
+      required: true
   - type: textarea
     id: what
     attributes:
       label: What happened?
-      description: What you said, what you expected, and what Kudu did instead.
+      description: What you did, what you expected, and what Kudu did instead.
     validations:
       required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Slack
+        2. Hold the dictation key and say "…"
+        3. Release
   - type: input
     id: app
     attributes:
       label: App you were dictating into
       placeholder: e.g. Notes, Slack, Terminal, Chrome (Gmail)
-  - type: input
-    id: macos
-    attributes:
-      label: macOS version and Mac model
-      placeholder: e.g. macOS 26.1, MacBook Air M2
-    validations:
-      required: true
-  - type: dropdown
-    id: key
-    attributes:
-      label: Dictation key
-      options: [fn, Right ⌘, Right ⌥]
   - type: textarea
     id: logs
     attributes:
       label: Logs (optional)
-      description: "Run `log stream --predicate 'subsystem == \"app.kudu\"'` while reproducing. Please remove anything private first."
+      description: |
+        macOS: run `log stream --predicate 'subsystem == "app.kudu"'` while reproducing.
+        Please remove anything private first.
       render: text
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and this hasn't been reported.
+          required: true
+        - label: I'm on the latest Kudu release.

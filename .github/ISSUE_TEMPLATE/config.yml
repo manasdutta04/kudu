@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/manasdutta04/kudu/security/advisories/new
+    about: Please report security issues privately, not as a public issue.
+  - name: Privacy policy
+    url: https://github.com/manasdutta04/kudu/blob/main/PRIVACY.md
+    about: What Kudu does and doesn't do with your data.
