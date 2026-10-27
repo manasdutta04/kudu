@@ -18,7 +18,7 @@ chmod -R u+w /Applications/Kudu.app && xattr -cr /Applications/Kudu.app
 
 On first launch, allow **Microphone** and **Accessibility** when Kudu asks. Hold **fn** to dictate.
 
-### Windows 10 / 11 (64-bit) · beta
+### Windows 10 / 11 (64-bit)
 
 In PowerShell:
 

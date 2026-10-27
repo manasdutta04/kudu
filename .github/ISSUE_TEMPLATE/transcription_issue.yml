@@ -1,0 +1,44 @@
+name: ✍️ Wrong text or formatting
+description: Kudu misheard you, formatted something badly or changed your words
+title: "[Text]: "
+labels: [transcription, triage]
+body:
+  - type: markdown
+    attributes:
+      value: Before/after examples are the most useful thing you can give us. Please remove anything private.
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options: [macOS, Windows, Linux]
+    validations:
+      required: true
+  - type: input
+    id: model
+    attributes:
+      label: Model
+      description: Mac model (Kudu Tiny or Kudu Base) or Windows/Linux model pack (Kudu Tiny, Base or Large).
+      placeholder: e.g. Kudu Base
+  - type: textarea
+    id: said
+    attributes:
+      label: What you said
+    validations:
+      required: true
+  - type: textarea
+    id: got
+    attributes:
+      label: What Kudu typed
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      render: text
+  - type: input
+    id: style
+    attributes:
+      label: App and style
+      placeholder: e.g. Gmail in Chrome, Formal, editing strength Polished

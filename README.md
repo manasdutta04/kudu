@@ -1,140 +1,180 @@
+<div align="center">
+
+<img src="public/kudu-icon.png" alt="Kudu logo" width="128" height="128" />
+
 # Kudu
 
-**Private, fast voice dictation.** Hold a key, speak, release: clean text appears wherever
-your cursor is, in any app. Speech recognition runs on your own computer. No account, no
-cloud, no telemetry.
+**Private, fast voice dictation for macOS, Windows and Linux.**<br />
+Hold a key, speak, release: clean text appears wherever your cursor is, in any app.<br />
+Everything runs on your computer. No account, no cloud, no subscription.
+
+[![Latest release](https://img.shields.io/github/v/release/manasdutta04/kudu?style=flat-square&color=0a84ff)](https://github.com/manasdutta04/kudu/releases/latest)
+[![CI](https://img.shields.io/github/actions/workflow/status/manasdutta04/kudu/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/manasdutta04/kudu/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-22c55e?style=flat-square)](LICENSE)
+[![Downloads](https://img.shields.io/github/downloads/manasdutta04/kudu/total?style=flat-square&color=8b5cf6)](https://github.com/manasdutta04/kudu/releases)
+[![Stars](https://img.shields.io/github/stars/manasdutta04/kudu?style=flat-square&color=f59e0b)](https://github.com/manasdutta04/kudu/stargazers)
+<br />
+[![macOS](https://img.shields.io/badge/macOS-stable-000000?style=flat-square&logo=apple&logoColor=white)](#install)
+[![Windows](https://img.shields.io/badge/Windows-stable-0078D6?style=flat-square&logo=windows&logoColor=white)](#install)
+[![Linux](https://img.shields.io/badge/Linux-beta-FCC624?style=flat-square&logo=linux&logoColor=black)](#install)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-ff69b4?style=flat-square)](CONTRIBUTING.md)
+[![100% on-device](https://img.shields.io/badge/privacy-100%25%20on--device-14b8a6?style=flat-square)](PRIVACY.md)
+
+[**Download**](https://github.com/manasdutta04/kudu/releases/latest) ·
+[Features](#features) ·
+[Why Kudu](#why-kudu) ·
+[Roadmap](docs/ROADMAP.md) ·
+[Contributing](CONTRIBUTING.md) ·
+[Report a bug](https://github.com/manasdutta04/kudu/issues/new/choose)
+
+</div>
+
+---
+
+## Highlights
 
 | | |
 |---|---|
-| ⚡ **Fast** | Text lands ~100–700 ms after you release the key, even for long, formatted dictations: Kudu formats while you speak (Apple M4) |
-| 🔒 **Private** | Audio never leaves your computer |
-| 🪶 **Light** | ~14 MB app. Mac: Kudu Tiny (~230 MB) or Kudu Base (~450 MB) for speech, formatting by Apple Intelligence. Windows and Linux: one model pack (0.48–0.84 GB). Downloaded once, then offline |
-| 🧩 **Native** | A native app per platform, not a web wrapper |
+| ⚡ **Fast** | Text lands ~100–700 ms after you release the key. Kudu formats while you speak. |
+| 🔒 **Private** | Your audio never leaves your computer. No telemetry, no analytics, no servers. |
+| 🪶 **Light** | ~14 MB app plus a one-time model download (0.23–0.98 GB). Works offline after that. |
+| 🧩 **Native** | A real native app per platform (Swift on the Mac, Rust on Windows and Linux), not a web wrapper. |
+| 💸 **Free and open source** | MIT licensed. No account, no API keys, no monthly bill. |
+
+## Why Kudu
+
+Most dictation apps send your voice to someone else's servers and charge you every month for
+it. Kudu does the whole job on your own machine, and it's free.
+
+| | **Kudu** | Wispr Flow | Superwhisper |
+|---|:---:|:---:|:---:|
+| Speech recognition on your computer | ✅ Always | ❌ Cloud | ✅ |
+| Formatting and rewriting on your computer | ✅ Always | ❌ Cloud | ⚠️ Depends on the model you pick |
+| Works fully offline | ✅ | ❌ | ✅ |
+| Open source | ✅ MIT | ❌ | ❌ |
+| Price | **Free** | Free tier, $15/mo Pro | Free tier, $8.49/mo Pro |
+| macOS · Windows | ✅ · ✅ | ✅ · ✅ | ✅ · ✅ |
+| Linux | ✅ (beta) | ❌ | ❌ |
+
+<sub>Comparison based on each product's public site as of October 2026. Spot something out of date? [Open an issue](https://github.com/manasdutta04/kudu/issues/new/choose).</sub>
 
 ## Install
 
-Download from [Releases](https://github.com/manasdutta04/kudu/releases/latest), or use one command.
-The apps aren't signed with paid certificates yet; these commands install Kudu and clear the
-"unidentified developer" warning.
+| Platform | Status | Requirements |
+|---|---|---|
+| 🍎 **macOS** | ✅ Stable | Apple Silicon (M1 or newer), macOS 14+ |
+| 🪟 **Windows** | ✅ Stable | Windows 10 or 11, x64 |
+| 🐧 **Linux** | 🧪 Beta | x86_64, X11 or Wayland |
 
-**macOS** (Apple Silicon, macOS 14+)
+Grab a package from [Releases](https://github.com/manasdutta04/kudu/releases/latest), or use one command:
+
+<details open>
+<summary><b>macOS</b></summary>
+
 ```bash
 curl -fsSL https://github.com/manasdutta04/kudu/releases/latest/download/install-macos.sh | bash
 ```
-Installed by hand (dragged from the .dmg)? Run this once so macOS opens the unsigned app:
+Installed from the `.dmg` by hand? Run this once so macOS opens the app:
 ```bash
 chmod -R u+w /Applications/Kudu.app && xattr -cr /Applications/Kudu.app
 ```
+</details>
 
-**Windows 10/11** (beta), in PowerShell
+<details>
+<summary><b>Windows</b></summary>
+
+In PowerShell:
 ```powershell
 irm https://github.com/manasdutta04/kudu/releases/latest/download/install.ps1 | iex
 ```
-Or run the installer (`Kudu-Windows-x64-Setup.exe`). When SmartScreen appears, click **More info → Run
-anyway**; for the portable zip, run `Unblock-File .\kudu.exe` in its folder.
+Or run `Kudu-Windows-x64-Setup.exe`. If SmartScreen appears, click **More info → Run anyway**.
+</details>
 
-**Linux** (beta, x86_64, X11 and Wayland): `.deb` and `.rpm` packages are on the release page, or
+<details>
+<summary><b>Linux (beta)</b></summary>
+
+`.deb` and `.rpm` packages are on the release page, or:
 ```bash
 curl -fsSL https://github.com/manasdutta04/kudu/releases/latest/download/install.sh | sh
 ```
-It asks for `sudo` once to let Kudu read the keyboard and type; log out and back in after.
+It asks for `sudo` once so Kudu can read the keyboard and type. Log out and back in afterwards.
+</details>
 
-## Platforms
-
-| Platform | Status | Folder |
-|---|---|---|
-| macOS 14+ on Apple Silicon (M1 or newer; not Intel) | ✅ Available (early) | [`macos/`](macos) (Swift, SwiftUI, AppKit) |
-| Windows 10/11 | 🧪 Beta: builds in CI, being tested | [`desktop/`](desktop) (Rust) |
-| Linux (X11 and Wayland) | 🧪 Beta: builds in CI, being tested | [`desktop/`](desktop) (Rust) |
+> The apps aren't signed with paid certificates yet, so the install commands also clear the
+> "unidentified developer" warning.
 
 ## Features
-- **A real Mac app:** a Dock icon, a Home dashboard with your words, speed, streak and full
-  history, plus an animated menu-bar icon that moves with your voice.
-- **Smart formatting on device, while you speak:** numbered lists, numbers written properly
-  ("three thirty" → 3:30), letter layout and paragraphs, using Apple's on-device model, without
-  changing your words.
-- **Command mode (fn + ⌃):** select text and say "make this more formal", "translate to
-  Hindi" or "summarize"; with nothing selected, say what to write and Kudu drafts it.
-- **Styles per app:** Formal, Casual or Very casual for personal messages, work messages and
-  email, plus an editing strength from Verbatim to Polished.
-- **Hold to talk** on fn, or any shortcut you set in Settings (Right ⌥, ⌃⌥, ⌥Space…). Double-tap
-  for hands-free; Escape cancels. Command mode and paste-last shortcuts are customizable too.
-- **Works in every app.** Uses Accessibility insertion where it works and a clipboard paste
-  elsewhere. Your clipboard is restored afterwards, and the paste key follows your keyboard layout.
-- **Cleans up as you speak:**
-  - Removes "um" and "uh".
-  - Applies corrections: "Tuesday, no, Wednesday" → "Wednesday".
-  - Understands "new line" and "new paragraph".
-  - Writes times properly ("10:30").
-  - Fits capitalization and spacing to the text around the cursor, and is code-aware in editors and terminals.
-- **Learns from your corrections:** fix a name Kudu misspelled and it remembers it for next
-  time (✦ in the Dictionary). Or add words yourself.
-- **Insights:** words per minute, words cleaned up, time saved, a streak heat map and where
-  you dictate.
-- **Snippets:** say "my email" and get your address. Supports `{date}`, `{time}` and `{clipboard}`.
-- **Meeting notes (off until you turn them on):**
-  - Kudu transcribes your calls in Zoom, Teams, Meet or any other app, on your computer, and
-    writes up the title, summary, decisions and action items when the call ends.
-  - It hears you through the microphone and the other people through what your computer plays,
-    labelling them "You" and "Others"; it never saves the audio.
-  - Start and stop with ⌃⌥N (Ctrl + Alt + N on Windows and Linux), the menu bar or tray, or let
-    Kudu ask or start by itself when a meeting app starts using the microphone.
-  - Notes are written by Apple Intelligence on a Mac and by the Kudu writer on Windows and
-    Linux. Without them, Kudu picks the action items and decisions from the transcript itself.
-  - Meetings are kept on the Meetings page until you delete them; copy or export them as
-    Markdown.
-- **History** saved only on your Mac, searchable by day, with the raw transcript.
-- A small frosted-glass pill with a live waveform; sounds; open at login.
+
+- 🎙️ **Hold to talk, anywhere.** Works in every app. Double-tap for hands-free; Escape cancels.
+- ✨ **Smart formatting while you speak.** Lists, numbers, times, paragraphs and email layout,
+  without changing your words. Removes "um" and "uh" and applies corrections
+  ("Tuesday, no, Wednesday" → "Wednesday").
+- 🪄 **Command mode.** Select text and say "make this more formal", "translate to Hindi" or
+  "summarize". With nothing selected, say what to write and Kudu drafts it.
+- 🎨 **Styles per app.** Formal, casual or very casual for messages and email.
+- 🧠 **Learns your words.** Fix a name once and Kudu remembers it. Add your own words and snippets.
+- 📝 **Meeting notes (opt-in).** Transcribes Zoom, Teams, Meet and more on your computer, then
+  writes the summary, decisions and action items. The audio is never saved.
+- 📊 **Insights.** Words per minute, time saved and a streak heat map, all stored locally.
 
 See the [roadmap](docs/ROADMAP.md) for what's next.
 
-## The AI inside (all on your computer)
-| Job | Mac | Windows and Linux |
+## How it works
+
+All of the AI runs on your computer. After a one-time model download, Kudu needs no network.
+
+| Job | macOS | Windows and Linux |
 |---|---|---|
-| Speech → text | **Kudu Tiny** (~230 MB) or **Kudu Base** (~450 MB) on the Apple Neural Engine, through FluidAudio | **kudu-speech-base** or **kudu-speech-tiny** (Moonshine Base) on the CPU, through sherpa-onnx |
-| Formatting and Command mode | Apple Intelligence (Apple's on-device Foundation Models, macOS 26+); nothing extra to download | **kudu-writer-tiny** or **kudu-writer-base**, Kudu's own writer models, through llama.cpp |
-| Cleanup, styles, dictionary, learning | Fast deterministic rules | The same rules, in Rust |
+| Speech → text | Kudu Tiny / Kudu Base on the Apple Neural Engine | kudu-speech-tiny / kudu-speech-base on the CPU |
+| Formatting and Command mode | Apple Intelligence (on-device) | [kudu-writer-tiny](https://huggingface.co/manasdutta04/kudu-writer-tiny) / [kudu-writer-base](https://huggingface.co/manasdutta04/kudu-writer-base) |
+| Cleanup, styles, dictionary | Fast deterministic rules | The same rules, in Rust |
 
-On Windows and Linux you pick one **model pack** at setup; speech and writer download together:
+The Kudu writers are small models fine-tuned for one job: formatting dictation without
+changing your words. Platform details live in [`macos/README.md`](macos/README.md) and
+[`desktop/README.md`](desktop/README.md).
 
-| Pack | Speech | Writer | Download | On disk |
-|---|---|---|---|---|
-| Kudu Tiny | kudu-speech-tiny | kudu-writer-tiny | 0.48 GB | 0.50 GB |
-| **Kudu Base** (default) | kudu-speech-base | kudu-writer-tiny | 0.71 GB | 0.86 GB |
-| Kudu Large | kudu-speech-base | kudu-writer-base | 0.84 GB | 0.98 GB |
+## Build from source
 
-The writers are small models fine-tuned for one job: formatting dictation without changing your
-words. On Kudu's dictation test set they keep about 98% of their replies through the app's
-safety check (a general-purpose model of the same size: 80%) and format a 50-word dictation in
-about a second on a laptop CPU. They're published on Hugging Face:
-[kudu-writer-tiny](https://huggingface.co/manasdutta04/kudu-writer-tiny) and
-[kudu-writer-base](https://huggingface.co/manasdutta04/kudu-writer-base).
-
-There are no servers, no accounts and no API keys. After the one-time download, Kudu works
-offline.
-
-## Quick start (macOS)
 ```bash
-cd macos
-scripts/build-app.sh && open build/Kudu.app
-```
-See [macos/README.md](macos/README.md) for requirements, signing, tests and benchmarks.
+git clone https://github.com/manasdutta04/kudu.git && cd kudu
 
-## Repository layout
+# macOS
+cd macos && scripts/build-app.sh && open build/Kudu.app
+
+# Windows and Linux
+cd desktop && cargo run --release -p kudu-app
+```
+
 | Path | What |
 |---|---|
-| [`macos/`](macos) | The macOS app: Swift package, scripts, tests, [architecture](macos/ARCHITECTURE.md) |
+| [`macos/`](macos) | The macOS app (Swift, SwiftUI, AppKit). See its [architecture](macos/ARCHITECTURE.md). |
+| [`desktop/`](desktop) | The Windows and Linux app (Rust) |
 | [`docs/`](docs) | Project-wide docs, such as the [roadmap](docs/ROADMAP.md) |
-| [`PRIVACY.md`](PRIVACY.md) | What Kudu does and doesn't do with your data |
-| [`CONTRIBUTING.md`](CONTRIBUTING.md) | How to contribute |
-| [`CHANGELOG.md`](CHANGELOG.md) | Release notes |
+
+## Community
+
+- 🐛 Found a bug or have an idea? [Open an issue](https://github.com/manasdutta04/kudu/issues/new/choose).
+- 🤝 Want to help? Read [CONTRIBUTING.md](CONTRIBUTING.md) and our [Code of Conduct](CODE_OF_CONDUCT.md).
+- 🔐 Found a security problem? Please report it privately: see [SECURITY.md](SECURITY.md).
+- 🛡️ What happens with your data: [PRIVACY.md](PRIVACY.md). Release notes: [CHANGELOG.md](CHANGELOG.md).
 
 ## Credits
-- [NVIDIA Parakeet TDT 0.6B v2](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2) (kudu-speech-base; Kudu Base on the Mac): CC-BY-4.0, by NVIDIA.
-- [NVIDIA Parakeet TDT-CTC 110M](https://huggingface.co/nvidia/parakeet-tdt_ctc-110m) (Kudu Tiny on the Mac): CC-BY-4.0, by NVIDIA, through FluidInference's Core ML conversion. On the Mac, FluidInference's Core ML conversion; on Windows and Linux, the sherpa-onnx int8 export.
-- [Moonshine Base](https://huggingface.co/moonshine-ai/moonshine-base) (kudu-speech-tiny): MIT, by Useful Sensors / Moonshine AI.
-- [kudu-writer-tiny](https://huggingface.co/manasdutta04/kudu-writer-tiny), fine-tuned from [SmolLM2-360M-Instruct](https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct), and [kudu-writer-base](https://huggingface.co/manasdutta04/kudu-writer-base), fine-tuned from [Qwen2.5-0.5B-Instruct](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct): Apache-2.0.
-- [FluidAudio](https://github.com/FluidInference/FluidAudio), [sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx): Apache-2.0. [llama.cpp](https://github.com/ggml-org/llama.cpp): MIT.
+
+Kudu stands on great open work:
+[NVIDIA Parakeet](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2) (CC-BY-4.0),
+[Moonshine](https://huggingface.co/moonshine-ai/moonshine-base) (MIT),
+[SmolLM2](https://huggingface.co/HuggingFaceTB/SmolLM2-360M-Instruct) and
+[Qwen2.5](https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct) (Apache-2.0, base models for the Kudu writers),
+[FluidAudio](https://github.com/FluidInference/FluidAudio) and
+[sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) (Apache-2.0), and
+[llama.cpp](https://github.com/ggml-org/llama.cpp) (MIT).
 
 ## License
-MIT. See [LICENSE](LICENSE).
+
+[MIT](LICENSE) © 2026 Manas Dutta
+
+<div align="center">
+<br />
+<b>Built by <a href="https://github.com/manasdutta04">Manas Dutta</a>.</b><br />
+If Kudu saves you time, a ⭐ on the repo helps others find it.
+</div>
